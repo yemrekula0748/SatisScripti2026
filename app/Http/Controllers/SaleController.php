@@ -14,9 +14,15 @@ use Illuminate\Support\Facades\DB;
 
 class SaleController extends Controller
 {
-    private function companyId()
+    private function companyId(): int
     {
-        return Auth::user()->company_id;
+        // Super admin için ilk aktif şirketi kullan (POS genellikle şirket kullanıcısı kullanır)
+        $user = Auth::user();
+        if ($user->company_id) {
+            return $user->company_id;
+        }
+        // Super admin ise session'dan şirket seç, yoksa ilk şirketi al
+        return session('pos_company_id', \App\Models\Company::first()?->id ?? 1);
     }
 
     public function pos()
