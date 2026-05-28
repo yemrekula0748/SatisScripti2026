@@ -512,18 +512,26 @@ function posApp() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
                     },
                     body: JSON.stringify({ rates: this.tempRates }),
                 });
-                const data = await resp.json();
+                const text = await resp.text();
+                let data;
+                try { data = JSON.parse(text); }
+                catch(e) {
+                    console.error('Sunucu yanıtı:', text.substring(0, 300));
+                    Swal.fire({ icon: 'error', title: 'Sunucu Hatası', text: 'HTTP ' + resp.status + ' — Konsolu kontrol edin.' });
+                    return;
+                }
                 if (data.success) {
                     this.rates = { ...this.tempRates };
                     this.showCurrencyModal = false;
                     this.autoFillPayment();
                     Swal.fire({ icon: 'success', title: 'Kurlar kaydedildi!', timer: 1500, showConfirmButton: false });
                 } else {
-                    Swal.fire({ icon: 'error', title: 'Hata', text: data.message || 'Kaydedilemedi.' });
+                    Swal.fire({ icon: 'error', title: 'Hata', text: data.message || JSON.stringify(data.errors) || 'Kaydedilemedi.' });
                 }
             } catch(e) {
                 Swal.fire({ icon: 'error', title: 'Bağlantı hatası', text: e.message });
@@ -578,6 +586,7 @@ function posApp() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
                     },
                     body: JSON.stringify(payload),
