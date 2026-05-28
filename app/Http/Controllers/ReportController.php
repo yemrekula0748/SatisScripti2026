@@ -72,7 +72,7 @@ class ReportController extends Controller
 
         $hourlyData = Sale::where('company_id', $companyId)
             ->whereDate('created_at', today())
-            ->select(DB::raw("strftime('%H', created_at) as hour"), DB::raw('SUM(total) as total'), DB::raw('COUNT(*) as count'))
+            ->select(DB::raw("HOUR(created_at) as hour"), DB::raw('SUM(total) as total'), DB::raw('COUNT(*) as count'))
             ->groupBy('hour')
             ->orderBy('hour')
             ->get();
