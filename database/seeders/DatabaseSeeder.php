@@ -19,7 +19,7 @@ class DatabaseSeeder extends Seeder
 
         $permissions = [
             'dashboard.view',
-            'sales.view', 'sales.create',
+            'sales.view', 'sales.create', 'sales.history',
             'products.view', 'products.create', 'products.edit', 'products.delete',
             'customers.view', 'customers.create', 'customers.edit', 'customers.delete',
             'users.view', 'users.create', 'users.edit', 'users.delete',
@@ -38,7 +38,7 @@ class DatabaseSeeder extends Seeder
         $companyAdminRole->syncPermissions(array_values(array_filter($permissions, fn($p) => !str_starts_with($p, 'companies.'))));
 
         $cashierRole = Role::firstOrCreate(['name' => 'cashier']);
-        $cashierRole->syncPermissions(['dashboard.view', 'sales.view', 'sales.create', 'products.view', 'customers.view']);
+        $cashierRole->syncPermissions(['dashboard.view', 'sales.view', 'sales.create', 'sales.history', 'products.view', 'customers.view']);
 
         $superAdmin = User::firstOrCreate(
             ['email' => 'admin@pos.com'],

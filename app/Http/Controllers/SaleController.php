@@ -112,6 +112,25 @@ class SaleController extends Controller
         return response()->json(['success' => true, 'message' => 'Satış tamamlandı.']);
     }
 
+    public function history(Request $request)
+    {
+        $query = Sale::with(['items', 'payments', 'user'])
+            ->where('company_id', $this->companyId());
+
+        if ($request->filled('search')) {
+            $query->where('customer_name', 'like', '%' . $request->search . '%');
+        }
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        $sales = $query->latest()->paginate(30)->withQueryString();
+        return view('sales.history', compact('sales'));
+    }
+
     public function saveCurrencyRates(Request $request)
     {
         $data = $request->validate([

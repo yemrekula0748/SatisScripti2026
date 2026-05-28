@@ -41,8 +41,15 @@
 
             @can('sales.view')
             <a href="{{ route('sales.pos') }}"
-               class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all {{ request()->routeIs('sales.*') ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+               class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all {{ request()->routeIs('sales.pos') ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
                 <i class="fas fa-cash-register w-4"></i> Satış Ekranı
+            </a>
+            @endcan
+
+            @can('sales.history')
+            <a href="{{ route('sales.history') }}"
+               class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all {{ request()->routeIs('sales.history') ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <i class="fas fa-receipt w-4"></i> Satış Geçmişi
             </a>
             @endcan
 

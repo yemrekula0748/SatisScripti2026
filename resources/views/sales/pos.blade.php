@@ -194,38 +194,12 @@
             </select>
         </div>
 
-        {{-- Sepet Kalemleri --}}
-        <div class="cart-items flex-1 px-3 py-2">
-            <div x-show="cart.length === 0" class="flex flex-col items-center justify-center py-10 text-slate-300">
-                <i class="fas fa-shopping-basket text-3xl mb-2 opacity-40"></i>
-                <p class="text-xs">Sepet boş</p>
-            </div>
-            <template x-for="(item, index) in cart" :key="index">
-                <div class="flex items-center gap-2 py-2 border-b border-slate-50 last:border-0">
-                    <div class="flex-1 min-w-0">
-                        <p class="text-xs font-semibold text-slate-800 leading-tight truncate" x-text="item.name"></p>
-                        <p class="text-xs text-slate-400 mt-0.5" x-text="formatPrice(item.price) + ' ₺'"></p>
-                    </div>
-                    <div class="flex items-center gap-1 flex-shrink-0">
-                        <button @click="decreaseQty(index)"
-                            class="w-6 h-6 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-xs font-bold">
-                            <i class="fas fa-minus" style="font-size:9px"></i>
-                        </button>
-                        <input type="number" x-model.number="item.qty" @change="updateQty(index, $event.target.value)"
-                            class="w-10 text-center text-xs font-bold border border-slate-200 rounded py-1 outline-none focus:ring-1 focus:ring-indigo-300">
-                        <button @click="increaseQty(index)"
-                            class="w-6 h-6 flex items-center justify-center bg-indigo-100 hover:bg-indigo-200 text-indigo-600 rounded text-xs font-bold">
-                            <i class="fas fa-plus" style="font-size:9px"></i>
-                        </button>
-                    </div>
-                    <div class="flex items-center gap-1 flex-shrink-0">
-                        <span class="text-xs font-bold text-slate-800 w-14 text-right" x-text="formatPrice(item.price * item.qty) + ' ₺'"></span>
-                        <button @click="removeFromCart(index)" class="w-5 h-5 flex items-center justify-center text-slate-300 hover:text-red-500">
-                            <i class="fas fa-times" style="font-size:10px"></i>
-                        </button>
-                    </div>
-                </div>
-            </template>
+        {{-- Ürün sayısı özeti --}}
+        <div class="px-4 py-2 border-b border-slate-100 bg-slate-50">
+            <p class="text-xs text-slate-500">
+                <span x-show="cart.length === 0">Sepet boş</span>
+                <span x-show="cart.length > 0"><span class="font-bold text-indigo-700" x-text="cart.length"></span> çeşit ürün</span>
+            </p>
         </div>
 
         {{-- Toplamlar --}}
@@ -620,12 +594,31 @@ function posApp() {
                 const data = await resp.json();
 
                 if (data.success) {
+                    const change = this.paymentTotal - this.total;
+                    const paymentLabels = {
+                        TL: 'Türk Lirası', EURO: 'Euro €', DOLAR: 'Dolar $',
+                        RUBLE: 'Ruble ₽', PAUND: 'Pound £',
+                        KREDI_KARTI: 'Kredi Kartı', BANKA_HAVALE: 'Banka Havale',
+                    };
+                    let payRows = activePayments.map(p => {
+                        const label = paymentLabels[p.payment_type] || p.payment_type;
+                        const inTl = p.amount * p.exchange_rate;
+                        if (p.exchange_rate === 1) {
+                            return `<tr><td class="text-left text-slate-600 py-0.5">${label}</td><td class="text-right font-semibold pl-4">${this.formatPrice(p.amount)} ₺</td></tr>`;
+                        } else {
+                            return `<tr><td class="text-left text-slate-600 py-0.5">${label}</td><td class="text-right font-semibold pl-4">${this.formatPrice(p.amount)} (≈${this.formatPrice(inTl)} ₺)</td></tr>`;
+                        }
+                    }).join('');
+                    const changeRow = change > 0.009 ? `<tr class="border-t border-slate-200"><td class="text-left text-green-600 font-semibold pt-1">Para Üstü</td><td class="text-right font-bold text-green-600 pl-4 pt-1">${this.formatPrice(change)} ₺</td></tr>` : '';
                     await Swal.fire({
                         icon: 'success',
                         title: 'Satış Tamamlandı!',
-                        html: `<p class="text-3xl font-bold text-indigo-700 mt-1">${this.formatPrice(this.total)} ₺</p>`,
-                        timer: 2000,
-                        showConfirmButton: false,
+                        html: `
+                            <p class="text-2xl font-bold text-indigo-700 mb-3">${this.formatPrice(this.total)} ₺</p>
+                            <table class="w-full text-sm">${payRows}${changeRow}</table>
+                        `,
+                        confirmButtonText: '<i class="fas fa-check"></i> Tamam',
+                        confirmButtonColor: '#4f46e5',
                     });
                     this.cart = [];
                     this.discountPercent = 0;
