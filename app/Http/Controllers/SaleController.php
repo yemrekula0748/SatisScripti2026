@@ -116,10 +116,10 @@ class SaleController extends Controller
     {
         $data = $request->validate([
             'rates' => 'required|array',
-            'rates.EUR' => 'required|numeric|min:0',
-            'rates.USD' => 'required|numeric|min:0',
-            'rates.GBP' => 'required|numeric|min:0',
-            'rates.RUB' => 'required|numeric|min:0',
+            'rates.EUR' => 'nullable|numeric|min:0',
+            'rates.USD' => 'nullable|numeric|min:0',
+            'rates.GBP' => 'nullable|numeric|min:0',
+            'rates.RUB' => 'nullable|numeric|min:0',
         ]);
 
         foreach ($data['rates'] as $currency => $rate) {

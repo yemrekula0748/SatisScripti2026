@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Models\CurrencyRate;
 use Illuminate\Http\Request;
 
 class CompanyController extends Controller
@@ -29,7 +30,13 @@ class CompanyController extends Controller
             'tax_number' => 'nullable|string|max:50',
         ]);
 
-        Company::create($data);
+        $company = Company::create($data);
+
+        // Yeni şirkete varsayılan döviz kurları oluştur
+        foreach (['EUR' => 38.50, 'USD' => 35.20, 'GBP' => 44.80, 'RUB' => 0.39] as $currency => $rate) {
+            CurrencyRate::create(['company_id' => $company->id, 'currency' => $currency, 'rate' => $rate]);
+        }
+
         return back()->with('success', 'Şirket eklendi.');
     }
 
