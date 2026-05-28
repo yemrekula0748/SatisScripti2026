@@ -104,34 +104,60 @@
             </div>
         </div>
 
-        {{-- Son Eklenen Ürünler (Sepet özeti sol tarafta) --}}
-        <div class="flex-1 p-4 overflow-y-auto">
+        {{-- Sepet Tablosu --}}
+        <div class="flex-1 overflow-y-auto">
             <div x-show="cart.length === 0" class="flex flex-col items-center justify-center h-full text-slate-300 select-none">
                 <i class="fas fa-barcode text-7xl mb-4 opacity-30"></i>
                 <p class="text-lg font-medium">Barkod okutun veya ürün adı yazın</p>
                 <p class="text-sm mt-1 opacity-70">Ürünler otomatik sepete eklenecek</p>
             </div>
 
-            <div x-show="cart.length > 0">
-                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                    Sepete Eklenenler (<span x-text="cart.length"></span> ürün)
-                </p>
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    <template x-for="(item, index) in cart" :key="index">
-                        <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 relative group">
-                            <button @click="removeFromCart(index)"
-                                class="absolute top-2 right-2 w-5 h-5 flex items-center justify-center text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
-                                <i class="fas fa-times text-xs"></i>
-                            </button>
-                            <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mb-2">
-                                <i class="fas fa-check text-green-500 text-xs"></i>
-                            </div>
-                            <p class="text-xs font-semibold text-slate-800 leading-tight line-clamp-2 mb-1" x-text="item.name"></p>
-                            <p class="text-xs text-indigo-600 font-bold" x-text="formatPrice(item.price * item.qty) + ' ₺'"></p>
-                            <p class="text-xs text-slate-400" x-text="item.qty + ' ' + item.unit + ' × ' + formatPrice(item.price)"></p>
-                        </div>
-                    </template>
-                </div>
+            <div x-show="cart.length > 0" class="h-full flex flex-col">
+                <table class="w-full text-sm border-collapse">
+                    <thead class="bg-slate-100 sticky top-0 z-10">
+                        <tr>
+                            <th class="text-left px-3 py-2 text-xs font-semibold text-slate-500 w-8">#</th>
+                            <th class="text-left px-3 py-2 text-xs font-semibold text-slate-500">Ürün Adı</th>
+                            <th class="text-right px-3 py-2 text-xs font-semibold text-slate-500 w-24">Birim Fiyat</th>
+                            <th class="text-center px-3 py-2 text-xs font-semibold text-slate-500 w-32">Miktar</th>
+                            <th class="text-right px-3 py-2 text-xs font-semibold text-slate-500 w-24">Toplam</th>
+                            <th class="w-8"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(item, index) in cart" :key="index">
+                            <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                <td class="px-3 py-2 text-xs text-slate-400 font-medium" x-text="index + 1"></td>
+                                <td class="px-3 py-2">
+                                    <p class="text-sm font-semibold text-slate-800 leading-tight" x-text="item.name"></p>
+                                    <p class="text-xs text-slate-400" x-text="item.unit"></p>
+                                </td>
+                                <td class="px-3 py-2 text-right text-sm text-slate-600 whitespace-nowrap" x-text="formatPrice(item.price) + ' ₺'"></td>
+                                <td class="px-3 py-2">
+                                    <div class="flex items-center justify-center gap-1">
+                                        <button @click="item.qty > 0.001 ? item.qty = Math.round((item.qty - 1) * 1000) / 1000 : removeFromCart(index)"
+                                            class="w-7 h-7 flex items-center justify-center bg-slate-200 hover:bg-red-100 hover:text-red-600 rounded-lg text-slate-600 font-bold text-sm transition-colors">
+                                            <i class="fas fa-minus text-xs"></i>
+                                        </button>
+                                        <input type="number" x-model.number="item.qty" @change="item.qty <= 0 && removeFromCart(index)" min="0.001" step="0.001"
+                                            class="w-14 text-center text-sm font-semibold border border-slate-200 rounded-lg py-1 outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
+                                        <button @click="item.qty = Math.round((item.qty + 1) * 1000) / 1000"
+                                            class="w-7 h-7 flex items-center justify-center bg-slate-200 hover:bg-green-100 hover:text-green-600 rounded-lg text-slate-600 font-bold text-sm transition-colors">
+                                            <i class="fas fa-plus text-xs"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td class="px-3 py-2 text-right text-sm font-bold text-indigo-600 whitespace-nowrap" x-text="formatPrice(item.price * item.qty) + ' ₺'"></td>
+                                <td class="px-3 py-2 text-center">
+                                    <button @click="removeFromCart(index)"
+                                        class="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
+                                        <i class="fas fa-trash text-xs"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
