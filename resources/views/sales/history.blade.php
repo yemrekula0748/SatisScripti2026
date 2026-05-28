@@ -56,9 +56,10 @@
                     <th class="text-center px-4 py-3 text-xs font-semibold text-slate-500">Detay</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
-                @forelse($sales as $sale)
-                <tr class="hover:bg-slate-50 transition-colors" x-data="{ open: false }">
+            @forelse($sales as $sale)
+            {{-- Her satış kendi tbody x-data scope'unda --}}
+            <tbody x-data="{ open: false }" class="border-b border-slate-100">
+                <tr class="hover:bg-slate-50 transition-colors">
                     <td class="px-4 py-3 text-slate-400 text-xs font-mono">{{ $sale->id }}</td>
                     <td class="px-4 py-3">
                         <p class="font-medium text-slate-800">{{ $sale->created_at->format('d.m.Y') }}</p>
@@ -96,7 +97,7 @@
                     <td class="px-4 py-3 text-center">
                         <button @click="open = !open"
                             class="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 rounded-lg text-xs font-medium transition-all">
-                            <i class="fas fa-chevron-down text-xs" :class="open && 'rotate-180'" style="transition:transform 0.2s"></i>
+                            <i class="fas fa-chevron-down text-xs" :class="{ 'rotate-180': open }" style="transition:transform 0.2s"></i>
                             Detay
                         </button>
                     </td>
@@ -208,15 +209,17 @@
                         </div>
                     </td>
                 </tr>
-                @empty
+            </tbody>
+            @empty
+            <tbody>
                 <tr>
                     <td colspan="7" class="px-4 py-12 text-center text-slate-400">
                         <i class="fas fa-receipt text-3xl mb-2 opacity-30 block"></i>
                         Satış kaydı bulunamadı.
                     </td>
                 </tr>
-                @endforelse
             </tbody>
+            @endforelse
         </table>
 
         @if($sales->hasPages())
