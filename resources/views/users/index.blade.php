@@ -5,7 +5,13 @@
 @section('content')
 <div x-data="{ showAdd: false, editUser: null }">
     <div class="flex items-center justify-between mb-5">
-        <p class="text-sm text-slate-500">Şirketinize bağlı kullanıcılar</p>
+        <p class="text-sm text-slate-500">
+            @if(auth()->user()->is_super_admin)
+                Tüm şirketlerin kullanıcıları
+            @else
+                Şirketinize bağlı kullanıcılar
+            @endif
+        </p>
         @can('users.create')
         <button @click="showAdd = true" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
             <i class="fas fa-plus"></i> Kullanıcı Ekle
@@ -19,6 +25,9 @@
                 <tr>
                     <th class="text-left px-5 py-3 text-slate-500 font-medium">Ad</th>
                     <th class="text-left px-5 py-3 text-slate-500 font-medium">E-posta</th>
+                    @if(auth()->user()->is_super_admin)
+                    <th class="text-left px-5 py-3 text-slate-500 font-medium">Şirket</th>
+                    @endif
                     <th class="text-left px-5 py-3 text-slate-500 font-medium">Rol</th>
                     <th class="text-left px-5 py-3 text-slate-500 font-medium">İzinler</th>
                     <th class="text-center px-5 py-3 text-slate-500 font-medium">Durum</th>
@@ -37,6 +46,13 @@
                         </div>
                     </td>
                     <td class="px-5 py-3 text-slate-500">{{ $user->email }}</td>
+                    @if(auth()->user()->is_super_admin)
+                    <td class="px-5 py-3">
+                        <span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">
+                            {{ $user->company->name ?? '—' }}
+                        </span>
+                    </td>
+                    @endif
                     <td class="px-5 py-3">
                         @foreach($user->roles as $role)
                         <span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs">{{ $role->name }}</span>
@@ -62,7 +78,7 @@
                     <td class="px-5 py-3 text-center">
                         <div class="flex items-center justify-center gap-2">
                             @can('users.edit')
-                            <button @click="editUser = {{ json_encode(['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'is_active' => $user->is_active, 'role' => $user->roles->first()?->name, 'permissions' => $user->permissions->pluck('name')]) }}"
+                            <button @click="editUser = {{ json_encode(['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'is_active' => $user->is_active, 'role' => $user->roles->first()?->name, 'permissions' => $user->permissions->pluck('name'), 'company_id' => $user->company_id]) }}"
                                 class="w-7 h-7 flex items-center justify-center bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs">
                                 <i class="fas fa-edit"></i>
                             </button>
@@ -81,7 +97,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="6" class="px-5 py-10 text-center text-slate-400">Henüz kullanıcı yok</td></tr>
+                <tr><td colspan="7" class="px-5 py-10 text-center text-slate-400">Henüz kullanıcı yok</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -97,6 +113,17 @@
             <form action="{{ route('users.store') }}" method="POST" class="p-5 space-y-4">
                 @csrf
                 <div class="grid grid-cols-2 gap-4">
+                    @if(auth()->user()->is_super_admin)
+                    <div class="col-span-2">
+                        <label class="block text-xs font-semibold text-indigo-600 mb-1">Şirket *</label>
+                        <select name="company_id" required class="w-full border-2 border-indigo-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300">
+                            <option value="">-- Şirket Seçin --</option>
+                            @foreach($companies as $company)
+                            <option value="{{ $company->id }}">{{ $company->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endif
                     <div>
                         <label class="block text-xs font-medium text-slate-600 mb-1">Ad Soyad *</label>
                         <input type="text" name="name" required class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300">
@@ -147,6 +174,17 @@
             <template x-if="editUser">
                 <form :action="`/users/${editUser.id}`" method="POST" class="p-5 space-y-4">
                     @csrf @method('PUT')
+                    @if(auth()->user()->is_super_admin)
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-600 mb-1">Şirket *</label>
+                        <select name="company_id" required class="w-full border-2 border-indigo-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300">
+                            <option value="">-- Şirket Seçin --</option>
+                            @foreach($companies as $company)
+                            <option :value="'{{ $company->id }}'" :selected="editUser.company_id == {{ $company->id }}">{{ $company->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endif
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-medium text-slate-600 mb-1">Ad Soyad *</label>

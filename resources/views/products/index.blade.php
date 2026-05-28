@@ -6,7 +6,15 @@
 <div x-data="{ showAdd: false, editProduct: null }">
     {{-- Toolbar --}}
     <div class="flex items-center justify-between mb-5">
-        <form class="flex gap-2">
+        <form class="flex gap-2 flex-wrap">
+            @if(auth()->user()->is_super_admin)
+            <select name="company_id" class="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300">
+                <option value="">Tüm Şirketler</option>
+                @foreach($companies as $company)
+                <option value="{{ $company->id }}" {{ request('company_id') == $company->id ? 'selected' : '' }}>{{ $company->name }}</option>
+                @endforeach
+            </select>
+            @endif
             <input type="text" name="search" value="{{ request('search') }}" placeholder="Ürün adı veya barkod..."
                 class="border border-slate-200 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300 w-64">
             <button type="submit" class="bg-slate-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-600">
@@ -93,6 +101,17 @@
             <form action="{{ route('products.store') }}" method="POST" class="p-5 space-y-4">
                 @csrf
                 <div class="grid grid-cols-2 gap-4">
+                    @if(auth()->user()->is_super_admin)
+                    <div class="col-span-2">
+                        <label class="block text-xs font-semibold text-indigo-600 mb-1">Şirket *</label>
+                        <select name="company_id" required class="w-full border-2 border-indigo-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300">
+                            <option value="">-- Şirket Seçin --</option>
+                            @foreach($companies as $company)
+                            <option value="{{ $company->id }}">{{ $company->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endif
                     <div class="col-span-2">
                         <label class="block text-xs font-medium text-slate-600 mb-1">Ürün Adı *</label>
                         <input type="text" name="name" required class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300">

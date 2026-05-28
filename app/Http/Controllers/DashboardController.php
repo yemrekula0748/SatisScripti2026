@@ -13,34 +13,35 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
         $companyId = $user->company_id;
+        $isSuperAdmin = $user->is_super_admin;
 
         $todaySales = Sale::query()
-            ->when($companyId, fn($q) => $q->where('company_id', $companyId))
+            ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId))
             ->whereDate('created_at', today())
             ->count();
 
         $todayRevenue = Sale::query()
-            ->when($companyId, fn($q) => $q->where('company_id', $companyId))
+            ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId))
             ->whereDate('created_at', today())
             ->sum('total');
 
         $productCount = Product::query()
-            ->when($companyId, fn($q) => $q->where('company_id', $companyId))
+            ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId))
             ->where('is_active', true)
             ->count();
 
         $customerCount = Customer::query()
-            ->when($companyId, fn($q) => $q->where('company_id', $companyId))
+            ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId))
             ->count();
 
         $monthRevenue = Sale::query()
-            ->when($companyId, fn($q) => $q->where('company_id', $companyId))
+            ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId))
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
             ->sum('total');
 
         $recentSales = Sale::with(['user', 'customer', 'payments'])
-            ->when($companyId, fn($q) => $q->where('company_id', $companyId))
+            ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId))
             ->latest()
             ->limit(5)
             ->get();
