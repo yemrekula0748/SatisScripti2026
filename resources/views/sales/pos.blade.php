@@ -190,17 +190,7 @@
             </div>
         </div>
 
-        {{-- Müşteri --}}
-        @if($company && $company->show_customer_field)
-        <div class="px-4 py-2.5 border-b border-slate-100">
-            <select x-model="selectedCustomerId" class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 outline-none focus:ring-2 focus:ring-indigo-300">
-                <option value="">Misafir Müşteri</option>
-                @foreach($customers as $customer)
-                <option value="{{ $customer->id }}">{{ $customer->name }}{{ $customer->phone ? ' — '.$customer->phone : '' }}</option>
-                @endforeach
-            </select>
-        </div>
-        @endif
+
 
         {{-- Ürün sayısı özeti --}}
         <div class="px-4 py-2 border-b border-slate-100 bg-slate-50">
@@ -212,15 +202,11 @@
 
         {{-- Toplamlar --}}
         <div class="border-t border-slate-200 px-4 py-3 space-y-2 bg-slate-50">
-            <div class="flex justify-between text-sm text-slate-600">
-                <span>Ara Toplam:</span>
-                <span x-text="formatPrice(subtotal) + ' ₺'"></span>
-            </div>
             <div x-show="discountPercent > 0" class="flex justify-between text-sm text-orange-600 font-medium">
                 <span>İndirim (<span x-text="discountPercent"></span>%):</span>
                 <span>−<span x-text="formatPrice(discountAmount)"></span> ₺</span>
             </div>
-            <div class="flex justify-between text-lg font-bold text-indigo-700 pt-2 border-t border-slate-200">
+            <div class="flex justify-between text-lg font-bold text-indigo-700 pt-1 border-t border-slate-200">
                 <span>TOPLAM:</span>
                 <span x-text="formatPrice(total) + ' ₺'"></span>
             </div>
