@@ -27,10 +27,12 @@ class SaleController extends Controller
 
     public function pos()
     {
-        $customers = Customer::where('company_id', $this->companyId())->orderBy('name')->get();
-        $rates = CurrencyRate::where('company_id', $this->companyId())->get()->keyBy('currency');
+        $companyId = $this->companyId();
+        $company = \App\Models\Company::find($companyId);
+        $customers = Customer::where('company_id', $companyId)->orderBy('name')->get();
+        $rates = CurrencyRate::where('company_id', $companyId)->get()->keyBy('currency');
 
-        return view('sales.pos', compact('customers', 'rates'));
+        return view('sales.pos', compact('customers', 'rates', 'company'));
     }
 
     public function store(Request $request)

@@ -7,9 +7,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Company extends Model
 {
-    protected $fillable = ['name', 'address', 'phone', 'email', 'tax_number', 'logo', 'is_active'];
+    protected $fillable = ['name', 'address', 'phone', 'email', 'tax_number', 'logo', 'is_active', 'show_customer_field'];
 
-    protected $casts = ['is_active' => 'boolean'];
+    protected $casts = [
+        'is_active' => 'boolean',
+        'show_customer_field' => 'boolean',
+    ];
 
     public function users(): HasMany
     {

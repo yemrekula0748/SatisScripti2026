@@ -32,12 +32,18 @@
             <span class="text-white font-semibold text-sm">Satış Ekranı</span>
         </div>
     </div>
-    <div class="flex items-center gap-3 text-xs text-slate-400">
-        <span>{{ auth()->user()->name }}</span>
-        <span>|</span>
-        <span>{{ auth()->user()->company->name ?? 'Demo Şirket' }}</span>
-        <span>|</span>
-        <span x-text="now" class="font-mono"></span>
+    <div class="flex items-center gap-3">
+        <a href="{{ route('settings.index') }}" title="Ayarlar"
+            class="text-slate-400 hover:text-slate-300 transition-colors">
+            <i class="fas fa-sliders-h"></i>
+        </a>
+        <div class="flex items-center gap-3 text-xs text-slate-400">
+            <span>{{ auth()->user()->name }}</span>
+            <span>|</span>
+            <span>{{ auth()->user()->company->name ?? 'Demo Şirket' }}</span>
+            <span>|</span>
+            <span x-text="now" class="font-mono"></span>
+        </div>
     </div>
 </header>
 
@@ -185,6 +191,7 @@
         </div>
 
         {{-- Müşteri --}}
+        @if($company && $company->show_customer_field)
         <div class="px-4 py-2.5 border-b border-slate-100">
             <select x-model="selectedCustomerId" class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 outline-none focus:ring-2 focus:ring-indigo-300">
                 <option value="">Misafir Müşteri</option>
@@ -193,6 +200,7 @@
                 @endforeach
             </select>
         </div>
+        @endif
 
         {{-- Ürün sayısı özeti --}}
         <div class="px-4 py-2 border-b border-slate-100 bg-slate-50">
@@ -203,7 +211,7 @@
         </div>
 
         {{-- Toplamlar --}}
-        <div class="border-t border-slate-200 px-4 py-3 space-y-1.5 bg-slate-50">
+        <div class="border-t border-slate-200 px-4 py-3 space-y-2 bg-slate-50">
             <div class="flex justify-between text-sm text-slate-600">
                 <span>Ara Toplam:</span>
                 <span x-text="formatPrice(subtotal) + ' ₺'"></span>
@@ -212,9 +220,32 @@
                 <span>İndirim (<span x-text="discountPercent"></span>%):</span>
                 <span>−<span x-text="formatPrice(discountAmount)"></span> ₺</span>
             </div>
-            <div class="flex justify-between text-lg font-bold text-indigo-700 pt-1 border-t border-slate-200">
+            <div class="flex justify-between text-lg font-bold text-indigo-700 pt-2 border-t border-slate-200">
                 <span>TOPLAM:</span>
                 <span x-text="formatPrice(total) + ' ₺'"></span>
+            </div>
+            
+            {{-- Para Birimlerinde Toplamlar --}}
+            <div class="pt-2 border-t border-slate-200 space-y-1">
+                <p class="text-xs font-semibold text-slate-500 uppercase">Para Birimlerinde:</p>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-white rounded p-2 border border-slate-100">
+                        <p class="text-slate-500">Euro (€)</p>
+                        <p class="font-bold text-slate-800" x-text="rates['EUR'] ? formatPrice(total / rates['EUR']) : '—'"></p>
+                    </div>
+                    <div class="bg-white rounded p-2 border border-slate-100">
+                        <p class="text-slate-500">Dolar ($)</p>
+                        <p class="font-bold text-slate-800" x-text="rates['USD'] ? formatPrice(total / rates['USD']) : '—'"></p>
+                    </div>
+                    <div class="bg-white rounded p-2 border border-slate-100">
+                        <p class="text-slate-500">Pound (£)</p>
+                        <p class="font-bold text-slate-800" x-text="rates['GBP'] ? formatPrice(total / rates['GBP']) : '—'"></p>
+                    </div>
+                    <div class="bg-white rounded p-2 border border-slate-100">
+                        <p class="text-slate-500">Ruble (₽)</p>
+                        <p class="font-bold text-slate-800" x-text="rates['RUB'] ? formatPrice(total / rates['RUB']) : '—'"></p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -431,35 +462,27 @@ function posApp() {
                     unit: product.unit,
                 });
             }
-            this.autoFillPayment();
         },
 
         removeFromCart(index) {
             this.cart.splice(index, 1);
-            this.autoFillPayment();
         },
 
-        increaseQty(index) { this.cart[index].qty++; this.autoFillPayment(); },
+        increaseQty(index) { this.cart[index].qty++; },
 
         decreaseQty(index) {
             if (this.cart[index].qty > 1) { this.cart[index].qty--; }
             else { this.removeFromCart(index); return; }
-            this.autoFillPayment();
         },
 
         updateQty(index, val) {
             const qty = parseFloat(val);
             if (qty > 0) { this.cart[index].qty = qty; }
             else { this.removeFromCart(index); return; }
-            this.autoFillPayment();
         },
 
         autoFillPayment() {
-            // Eğer sadece TL ödeme varsa otomatik doldur
-            const otherPayments = Object.entries(this.payments).filter(([k,v]) => k !== 'TL' && v > 0);
-            if (otherPayments.length === 0) {
-                this.payments.TL = Math.round(this.total * 100) / 100;
-            }
+            // Artık otomatik doldurma yapılmıyor - kasiyer manuel girecek
         },
 
         async applyDiscount() {
@@ -477,7 +500,6 @@ function posApp() {
             });
             if (value !== undefined) {
                 this.discountPercent = parseFloat(value);
-                this.autoFillPayment();
             }
         },
 
@@ -528,7 +550,6 @@ function posApp() {
                 if (data.success) {
                     this.rates = { ...this.tempRates };
                     this.showCurrencyModal = false;
-                    this.autoFillPayment();
                     Swal.fire({ icon: 'success', title: 'Kurlar kaydedildi!', timer: 1500, showConfirmButton: false });
                 } else {
                     Swal.fire({ icon: 'error', title: 'Hata', text: data.message || JSON.stringify(data.errors) || 'Kaydedilemedi.' });
