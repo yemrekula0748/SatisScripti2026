@@ -8,6 +8,7 @@ use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\SaleReturn;
+use App\Models\SaleReturnItem;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
@@ -104,50 +105,116 @@ class DashboardController extends Controller
             ->distinct()
             ->count('customer_name');
 
-        $monthItemsSold = SaleItem::query()
+        $monthItemsSold = (float) SaleItem::query()
             ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
             ->when(!$isSuperAdmin, fn($q) => $q->where('sales.company_id', $companyId))
             ->whereBetween('sales.created_at', [$monthStart, $monthEnd])
             ->sum('sale_items.quantity');
 
-        $topProducts = SaleItem::query()
+        $monthReturnedItems = (float) SaleReturnItem::query()
+            ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_items.sale_return_id')
+            ->when(!$isSuperAdmin, fn($q) => $q->where('sale_returns.company_id', $companyId))
+            ->whereBetween('sale_returns.created_at', [$monthStart, $monthEnd])
+            ->sum('sale_return_items.quantity');
+
+        $monthNetItemsSold = max($monthItemsSold - $monthReturnedItems, 0);
+
+        $soldProducts = SaleItem::query()
             ->select('sale_items.product_name')
-            ->selectRaw('SUM(sale_items.quantity) as total_quantity')
-            ->selectRaw('SUM(sale_items.total) as total_revenue')
+            ->selectRaw('SUM(sale_items.quantity) as sold_quantity')
+            ->selectRaw('SUM(sale_items.total) as sold_revenue')
             ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
             ->when(!$isSuperAdmin, fn($q) => $q->where('sales.company_id', $companyId))
             ->whereBetween('sales.created_at', [$monthStart, $monthEnd])
             ->groupBy('sale_items.product_name')
-            ->orderByDesc('total_quantity')
-            ->limit(5)
             ->get()
-            ->map(function ($item) use ($monthItemsSold) {
-                $item->total_quantity = (float) $item->total_quantity;
-                $item->total_revenue = (float) $item->total_revenue;
-                $item->share = $monthItemsSold > 0
-                    ? ($item->total_quantity / (float) $monthItemsSold) * 100
-                    : 0;
+            ->keyBy('product_name');
 
-                return $item;
-            });
+        $returnedProducts = SaleReturnItem::query()
+            ->select('sale_return_items.product_name')
+            ->selectRaw('SUM(sale_return_items.quantity) as returned_quantity')
+            ->selectRaw('SUM(sale_return_items.total) as returned_revenue')
+            ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_items.sale_return_id')
+            ->when(!$isSuperAdmin, fn($q) => $q->where('sale_returns.company_id', $companyId))
+            ->whereBetween('sale_returns.created_at', [$monthStart, $monthEnd])
+            ->groupBy('sale_return_items.product_name')
+            ->get()
+            ->keyBy('product_name');
 
-        $topCashiers = Sale::query()
+        $topProducts = $soldProducts->keys()
+            ->merge($returnedProducts->keys())
+            ->unique()
+            ->map(function ($productName) use ($soldProducts, $returnedProducts, $monthNetItemsSold) {
+                $sold = $soldProducts->get($productName);
+                $returned = $returnedProducts->get($productName);
+
+                $soldQuantity = (float) ($sold->sold_quantity ?? 0);
+                $returnedQuantity = (float) ($returned->returned_quantity ?? 0);
+                $soldRevenue = (float) ($sold->sold_revenue ?? 0);
+                $returnedRevenue = (float) ($returned->returned_revenue ?? 0);
+                $netQuantity = $soldQuantity - $returnedQuantity;
+                $netRevenue = $soldRevenue - $returnedRevenue;
+
+                return (object) [
+                    'product_name' => $productName,
+                    'total_quantity' => $netQuantity,
+                    'total_revenue' => $netRevenue,
+                    'returned_quantity' => $returnedQuantity,
+                    'returned_revenue' => $returnedRevenue,
+                    'share' => $monthNetItemsSold > 0
+                        ? ($netQuantity / $monthNetItemsSold) * 100
+                        : 0,
+                ];
+            })
+            ->filter(fn($item) => $item->total_quantity > 0.0001 || $item->total_revenue > 0.009)
+            ->sortByDesc('total_quantity')
+            ->take(5)
+            ->values();
+
+        $grossCashiers = Sale::query()
             ->select('users.id', 'users.name')
             ->selectRaw('COUNT(sales.id) as sale_count')
-            ->selectRaw('SUM(sales.total) as total_revenue')
+            ->selectRaw('SUM(sales.total) as gross_revenue')
             ->join('users', 'users.id', '=', 'sales.user_id')
             ->when(!$isSuperAdmin, fn($q) => $q->where('sales.company_id', $companyId))
             ->whereBetween('sales.created_at', [$monthStart, $monthEnd])
             ->groupBy('users.id', 'users.name')
-            ->orderByDesc('total_revenue')
-            ->limit(3)
             ->get()
-            ->map(function ($cashier) {
-                $cashier->sale_count = (int) $cashier->sale_count;
-                $cashier->total_revenue = (float) $cashier->total_revenue;
+            ->keyBy('id');
 
-                return $cashier;
-            });
+        $returnedCashiers = SaleReturn::query()
+            ->select('users.id', 'users.name')
+            ->selectRaw('SUM(sale_returns.total) as return_total')
+            ->join('sales', 'sales.id', '=', 'sale_returns.sale_id')
+            ->join('users', 'users.id', '=', 'sales.user_id')
+            ->when(!$isSuperAdmin, fn($q) => $q->where('sale_returns.company_id', $companyId))
+            ->whereBetween('sale_returns.created_at', [$monthStart, $monthEnd])
+            ->groupBy('users.id', 'users.name')
+            ->get()
+            ->keyBy('id');
+
+        $topCashiers = $grossCashiers->keys()
+            ->merge($returnedCashiers->keys())
+            ->unique()
+            ->map(function ($cashierId) use ($grossCashiers, $returnedCashiers) {
+                $gross = $grossCashiers->get($cashierId);
+                $returned = $returnedCashiers->get($cashierId);
+
+                $grossRevenue = (float) ($gross->gross_revenue ?? 0);
+                $returnTotal = (float) ($returned->return_total ?? 0);
+
+                return (object) [
+                    'id' => (int) $cashierId,
+                    'name' => $gross->name ?? $returned->name ?? 'Bilinmiyor',
+                    'sale_count' => (int) ($gross->sale_count ?? 0),
+                    'total_revenue' => $grossRevenue - $returnTotal,
+                    'return_total' => $returnTotal,
+                ];
+            })
+            ->filter(fn($cashier) => $cashier->sale_count > 0 || $cashier->return_total > 0.009)
+            ->sortByDesc('total_revenue')
+            ->take(3)
+            ->values();
 
         $paymentBreakdown = SalePayment::query()
             ->select('sale_payments.payment_type')

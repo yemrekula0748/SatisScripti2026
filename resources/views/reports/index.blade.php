@@ -3,7 +3,6 @@
 @section('page-title', 'Raporlar')
 
 @section('content')
-{{-- Period Filter --}}
 <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-4 mb-5">
     <form class="flex flex-wrap items-center gap-3">
         <div class="flex gap-1">
@@ -31,17 +30,21 @@
     </div>
 </div>
 
-{{-- Summary Cards --}}
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
     <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
         <p class="text-sm text-slate-500">Toplam Satış</p>
         <p class="text-3xl font-bold text-slate-800 mt-1">{{ $totalSales }}</p>
         <p class="text-xs text-slate-400 mt-1">adet işlem</p>
     </div>
     <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-        <p class="text-sm text-slate-500">Toplam Ciro</p>
+        <p class="text-sm text-slate-500">Net Ciro</p>
         <p class="text-3xl font-bold text-indigo-700 mt-1">{{ number_format($totalRevenue, 2, ',', '.') }} ₺</p>
-        <p class="text-xs text-slate-400 mt-1">TL karşılığı</p>
+        <p class="text-xs text-slate-400 mt-1">satışlar eksi iadeler</p>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+        <p class="text-sm text-slate-500">Toplam İade</p>
+        <p class="text-3xl font-bold text-rose-600 mt-1">{{ number_format($totalReturns, 2, ',', '.') }} ₺</p>
+        <p class="text-xs text-slate-400 mt-1">dönem içinde yapılan iade</p>
     </div>
     <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
         <p class="text-sm text-slate-500">Toplam İndirim</p>
@@ -51,12 +54,12 @@
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-    {{-- Payment Breakdown --}}
     <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div class="p-4 border-b border-slate-100">
             <h3 class="font-semibold text-slate-800 flex items-center gap-2">
                 <i class="fas fa-credit-card text-indigo-500"></i> Ödeme Tiplerine Göre
             </h3>
+            <p class="text-xs text-slate-400 mt-1">Bu tablo brüt tahsilatı gösterir; iadeler net ciro kartında düşülür.</p>
         </div>
         @if($paymentBreakdown->isEmpty())
         <div class="p-8 text-center text-slate-400 text-sm">Bu dönemde satış yok</div>
@@ -74,7 +77,15 @@
                 @foreach($paymentBreakdown as $p)
                 @php
                     $share = $paymentBreakdown->sum('total_tl') > 0 ? ($p->total_tl / $paymentBreakdown->sum('total_tl') * 100) : 0;
-                    $labels = ['TL' => ['Türk Lirası', 'bg-blue-100 text-blue-700'], 'EURO' => ['Euro', 'bg-indigo-100 text-indigo-700'], 'DOLAR' => ['Dolar', 'bg-green-100 text-green-700'], 'RUBLE' => ['Ruble', 'bg-red-100 text-red-700'], 'PAUND' => ['Pound', 'bg-purple-100 text-purple-700'], 'KREDI_KARTI' => ['Kredi Kartı', 'bg-orange-100 text-orange-700'], 'BANKA_HAVALE' => ['Banka Havale', 'bg-teal-100 text-teal-700']];
+                    $labels = [
+                        'TL' => ['Türk Lirası', 'bg-blue-100 text-blue-700'],
+                        'EURO' => ['Euro', 'bg-indigo-100 text-indigo-700'],
+                        'DOLAR' => ['Dolar', 'bg-green-100 text-green-700'],
+                        'RUBLE' => ['Ruble', 'bg-red-100 text-red-700'],
+                        'PAUND' => ['Pound', 'bg-purple-100 text-purple-700'],
+                        'KREDI_KARTI' => ['Kredi Kartı', 'bg-orange-100 text-orange-700'],
+                        'BANKA_HAVALE' => ['Banka Havale', 'bg-teal-100 text-teal-700'],
+                    ];
                     $info = $labels[$p->payment_type] ?? [$p->payment_type, 'bg-slate-100 text-slate-700'];
                 @endphp
                 <tr class="hover:bg-slate-50">
@@ -99,12 +110,12 @@
         @endif
     </div>
 
-    {{-- Top Products --}}
     <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div class="p-4 border-b border-slate-100">
             <h3 class="font-semibold text-slate-800 flex items-center gap-2">
-                <i class="fas fa-trophy text-yellow-500"></i> En Çok Satan Ürünler
+                <i class="fas fa-trophy text-yellow-500"></i> Net Ürün Performansı
             </h3>
+            <p class="text-xs text-slate-400 mt-1">İadeler düşüldükten sonraki net satış görünümü.</p>
         </div>
         @if($topProducts->isEmpty())
         <div class="p-8 text-center text-slate-400 text-sm">Bu dönemde satış yok</div>
@@ -114,14 +125,14 @@
                 <tr>
                     <th class="text-left px-4 py-2.5 text-slate-500 text-xs font-medium">#</th>
                     <th class="text-left px-4 py-2.5 text-slate-500 text-xs font-medium">Ürün</th>
-                    <th class="text-right px-4 py-2.5 text-slate-500 text-xs font-medium">Adet</th>
-                    <th class="text-right px-4 py-2.5 text-slate-500 text-xs font-medium">Ciro</th>
+                    <th class="text-right px-4 py-2.5 text-slate-500 text-xs font-medium">Net Adet</th>
+                    <th class="text-right px-4 py-2.5 text-slate-500 text-xs font-medium">Net Ciro</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-50">
                 @foreach($topProducts as $i => $prod)
                 <tr class="hover:bg-slate-50">
-                    <td class="px-4 py-2.5 text-slate-400 font-medium">{{ $i+1 }}</td>
+                    <td class="px-4 py-2.5 text-slate-400 font-medium">{{ $i + 1 }}</td>
                     <td class="px-4 py-2.5 font-medium text-slate-800">{{ $prod->product_name }}</td>
                     <td class="px-4 py-2.5 text-right text-slate-600">{{ number_format($prod->total_qty, 2, ',', '.') }}</td>
                     <td class="px-4 py-2.5 text-right font-semibold text-indigo-700">{{ number_format($prod->total_revenue, 2, ',', '.') }} ₺</td>
@@ -133,20 +144,22 @@
     </div>
 </div>
 
-{{-- Daily Chart --}}
 @if($chartData->isNotEmpty())
 <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 mb-5">
     <h3 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-        <i class="fas fa-chart-area text-indigo-500"></i> Günlük Satış Grafiği
+        <i class="fas fa-chart-area text-indigo-500"></i> Günlük Net Ciro Grafiği
     </h3>
-    @php $maxTotal = $chartData->max('total') ?: 1; @endphp
+    @php $maxTotal = max($chartData->max(fn($day) => abs($day->total)) ?: 1, 1); @endphp
     <div class="flex items-end gap-2 h-32">
         @foreach($chartData as $day)
-        @php $height = max(4, ($day->total / $maxTotal) * 100); @endphp
+        @php
+            $height = max(4, (abs($day->total) / $maxTotal) * 100);
+            $barClass = $day->total < 0 ? 'bg-rose-500 hover:bg-rose-400' : 'bg-indigo-500 hover:bg-indigo-400';
+        @endphp
         <div class="flex-1 flex flex-col items-center gap-1 group">
-            <div class="w-full bg-indigo-500 hover:bg-indigo-400 rounded-t transition-all cursor-pointer relative"
+            <div class="w-full {{ $barClass }} rounded-t transition-all cursor-pointer relative"
                 style="height: {{ $height }}%"
-                title="{{ $day->date }}: {{ number_format($day->total, 2, ',', '.') }} ₺ ({{ $day->count }} satış)">
+                title="{{ $day->date }}: Net {{ number_format($day->total, 2, ',', '.') }} ₺ | İade {{ number_format($day->return_total, 2, ',', '.') }} ₺ | {{ $day->count }} satış">
             </div>
             <span class="text-xs text-slate-400 truncate w-full text-center">{{ \Carbon\Carbon::parse($day->date)->format('d/m') }}</span>
         </div>
@@ -155,24 +168,24 @@
 </div>
 @endif
 
-{{-- Hourly Chart --}}
 @if($hourlyData->isNotEmpty())
 <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
     <h3 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-        <i class="fas fa-clock text-green-500"></i> Bugün Saatlik Dağılım
+        <i class="fas fa-clock text-green-500"></i> Bugün Saatlik Net Ciro Dağılımı
     </h3>
-    @php $maxHour = $hourlyData->max('total') ?: 1; @endphp
+    @php $maxHour = max($hourlyData->max(fn($hour) => abs($hour->total)) ?: 1, 1); @endphp
     <div class="flex items-end gap-1 h-24">
         @foreach(range(0, 23) as $h)
         @php
-            $hourData = $hourlyData->firstWhere('hour', sprintf('%02d', $h));
+            $hourData = $hourlyData->firstWhere('hour', $h);
             $hTotal = $hourData?->total ?? 0;
-            $hHeight = max(2, ($hTotal / $maxHour) * 100);
+            $hHeight = max(2, (abs($hTotal) / $maxHour) * 100);
+            $hourClass = $hTotal > 0 ? 'bg-green-400 hover:bg-green-300' : ($hTotal < 0 ? 'bg-rose-400 hover:bg-rose-300' : 'bg-slate-100');
         @endphp
         <div class="flex-1 flex flex-col items-center gap-1 group">
-            <div class="w-full {{ $hTotal > 0 ? 'bg-green-400 hover:bg-green-300' : 'bg-slate-100' }} rounded-t transition-all"
+            <div class="w-full {{ $hourClass }} rounded-t transition-all"
                 style="height: {{ $hHeight }}%"
-                title="{{ $h }}:00 - {{ number_format($hTotal, 2, ',', '.') }} ₺"></div>
+                title="{{ $h }}:00 - Net {{ number_format($hTotal, 2, ',', '.') }} ₺ | İade {{ number_format($hourData?->return_total ?? 0, 2, ',', '.') }} ₺"></div>
             @if($h % 4 === 0)
             <span class="text-xs text-slate-400">{{ $h }}h</span>
             @else

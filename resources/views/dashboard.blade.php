@@ -152,8 +152,8 @@
 <div class="grid grid-cols-1 2xl:grid-cols-5 gap-5">
     <div class="2xl:col-span-3 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div class="p-5 border-b border-slate-100">
-            <h2 class="font-semibold text-slate-800">En Çok Giden Ürünler</h2>
-            <p class="text-sm text-slate-500 mt-1">Bu ay satışta öne çıkan ürünler ve ciro katkıları.</p>
+            <h2 class="font-semibold text-slate-800">Net Ürün Performansı</h2>
+            <p class="text-sm text-slate-500 mt-1">Bu ay iadeler düşüldükten sonra öne çıkan ürünler.</p>
         </div>
 
         <div class="p-5">
@@ -170,18 +170,21 @@
                                 </span>
                                 <div class="min-w-0">
                                     <p class="font-medium text-slate-800 truncate">{{ $product->product_name }}</p>
-                                    <p class="text-sm text-slate-500 mt-0.5">Toplam ciro: {{ number_format($product->total_revenue, 2, ',', '.') }} ₺</p>
+                                    <p class="text-sm text-slate-500 mt-0.5">Net ciro: {{ number_format($product->total_revenue, 2, ',', '.') }} ₺</p>
+                                    @if(($product->returned_quantity ?? 0) > 0)
+                                    <p class="text-xs text-rose-500 mt-1">İade düşümü: {{ number_format($product->returned_quantity, 2, ',', '.') }}</p>
+                                    @endif
                                 </div>
                             </div>
                         </div>
                         <div class="text-right shrink-0">
                             <p class="font-semibold text-slate-800">{{ number_format($product->total_quantity, 2, ',', '.') }}</p>
-                            <p class="text-sm text-slate-400">satılan miktar</p>
+                            <p class="text-sm text-slate-400">net satış miktarı</p>
                         </div>
                     </div>
                     <div class="mt-4">
                         <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
-                            <span>Aylık satış payı</span>
+                            <span>Aylık net satış payı</span>
                             <span>%{{ number_format($product->share, 1, ',', '.') }}</span>
                         </div>
                         <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
@@ -203,6 +206,7 @@
             <div class="p-5 border-b border-slate-100">
                 <h2 class="font-semibold text-slate-800">Ödeme Dağılımı</h2>
                 <p class="text-sm text-slate-500 mt-1">Bu ay müşteriler hangi ödeme yöntemlerini tercih etti?</p>
+                <p class="text-xs text-slate-400 mt-1">Bu bölüm brüt tahsilatı gösterir; iadeler ödeme kanalına göre ayrılmadığı için netlenmez.</p>
             </div>
             <div class="p-5 space-y-4">
                 @forelse($paymentBreakdown as $payment)
@@ -245,7 +249,7 @@
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
             <div class="p-5 border-b border-slate-100">
                 <h2 class="font-semibold text-slate-800">Ekip Performansı</h2>
-                <p class="text-sm text-slate-500 mt-1">Bu ay ciroya en çok katkı veren kasiyerler.</p>
+                <p class="text-sm text-slate-500 mt-1">Bu ay iadeler düşüldükten sonra net katkısı en yüksek kasiyerler.</p>
             </div>
             <div class="p-5 space-y-4">
                 @forelse($topCashiers as $cashier)
@@ -261,7 +265,10 @@
                         </div>
                         <div class="text-right shrink-0">
                             <p class="font-semibold text-slate-800">{{ number_format($cashier->total_revenue, 2, ',', '.') }} ₺</p>
-                            <p class="text-xs text-slate-400">aylık katkı</p>
+                            <p class="text-xs text-slate-400">aylık net katkı</p>
+                            @if(($cashier->return_total ?? 0) > 0)
+                            <p class="text-xs text-rose-500 mt-1">İade: −{{ number_format($cashier->return_total, 2, ',', '.') }} ₺</p>
+                            @endif
                         </div>
                     </div>
                 @empty
