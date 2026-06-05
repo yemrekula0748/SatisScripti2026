@@ -18,7 +18,7 @@
 
 <div class="flex min-h-screen">
     {{-- Sidebar --}}
-    <aside class="w-64 bg-slate-800 flex flex-col flex-shrink-0">
+    <aside class="w-64 bg-slate-800 flex flex-col flex-shrink-0 sticky top-0 h-screen overflow-hidden">
         <div class="p-5 border-b border-slate-700">
             <div class="flex items-center gap-3">
                 <div class="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center">
@@ -31,13 +31,11 @@
             </div>
         </div>
 
-        <nav class="flex-1 p-4 space-y-1">
-            @can('dashboard.view')
+        <nav class="flex-1 min-h-0 overflow-y-auto p-4 space-y-1">
             <a href="{{ route('dashboard') }}"
                class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all {{ request()->routeIs('dashboard') ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
                 <i class="fas fa-chart-line w-4"></i> Dashboard
             </a>
-            @endcan
 
             @can('sales.view')
             <a href="{{ route('sales.pos') }}"
@@ -91,7 +89,7 @@
             @endcan
         </nav>
 
-        <div class="p-4 border-t border-slate-700">
+        <div class="p-4 border-t border-slate-700 shrink-0">
             <div class="flex items-center gap-3 mb-3">
                 <div class="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
                     {{ strtoupper(substr(auth()->user()->name, 0, 2)) }}

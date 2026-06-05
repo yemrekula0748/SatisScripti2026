@@ -9,6 +9,7 @@ use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\SaleReturn;
 use App\Models\SaleReturnItem;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
@@ -18,6 +19,31 @@ class DashboardController extends Controller
         $user = Auth::user();
         $companyId = $user->company_id;
         $isSuperAdmin = $user->is_super_admin;
+        $canViewDashboardMetrics = $user->can('dashboard.view');
+
+        if (! $canViewDashboardMetrics) {
+            return view('dashboard', [
+                'canViewDashboardMetrics' => false,
+                'todaySales' => 0,
+                'todayRevenue' => 0,
+                'todayReturnTotal' => 0,
+                'productCount' => 0,
+                'customerCount' => 0,
+                'monthRevenue' => 0,
+                'monthReturnTotal' => 0,
+                'monthSalesCount' => 0,
+                'averageBasket' => 0,
+                'last7DaysRevenue' => 0,
+                'previous7DaysRevenue' => 0,
+                'weeklyTrend' => null,
+                'monthDiscountTotal' => 0,
+                'monthCustomerReach' => 0,
+                'topProducts' => collect(),
+                'topCashiers' => collect(),
+                'paymentBreakdown' => collect(),
+            ]);
+        }
+
         $today = today();
         $monthStart = now()->startOfMonth();
         $monthEnd = now()->endOfMonth();
@@ -26,10 +52,10 @@ class DashboardController extends Controller
         $previous7DaysEnd = now()->subDays(7)->endOfDay();
 
         $salesQuery = Sale::query()
-            ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId));
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('company_id', $companyId));
 
         $returnsQuery = SaleReturn::query()
-            ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId));
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('company_id', $companyId));
 
         $todaySales = (clone $salesQuery)
             ->whereDate('created_at', $today)
@@ -46,12 +72,12 @@ class DashboardController extends Controller
         $todayRevenue = $todayGrossRevenue - $todayReturnTotal;
 
         $productCount = Product::query()
-            ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId))
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('company_id', $companyId))
             ->where('is_active', true)
             ->count();
 
         $customerCount = Customer::query()
-            ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId))
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('company_id', $companyId))
             ->count();
 
         $monthGrossRevenue = (clone $salesQuery)
@@ -68,7 +94,7 @@ class DashboardController extends Controller
             ->whereBetween('created_at', [$monthStart, $monthEnd])
             ->count();
 
-        $averageBasket = $todaySales > 0 ? $todayGrossRevenue / $todaySales : 0;
+        $averageBasket = $todaySales > 0 ? $todayRevenue / $todaySales : 0;
 
         $last7DaysGrossRevenue = (clone $salesQuery)
             ->whereBetween('created_at', [$last7DaysStart, now()->endOfDay()])
@@ -107,13 +133,13 @@ class DashboardController extends Controller
 
         $monthItemsSold = (float) SaleItem::query()
             ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->where('sales.company_id', $companyId))
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('sales.company_id', $companyId))
             ->whereBetween('sales.created_at', [$monthStart, $monthEnd])
             ->sum('sale_items.quantity');
 
         $monthReturnedItems = (float) SaleReturnItem::query()
             ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_items.sale_return_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->where('sale_returns.company_id', $companyId))
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('sale_returns.company_id', $companyId))
             ->whereBetween('sale_returns.created_at', [$monthStart, $monthEnd])
             ->sum('sale_return_items.quantity');
 
@@ -124,7 +150,7 @@ class DashboardController extends Controller
             ->selectRaw('SUM(sale_items.quantity) as sold_quantity')
             ->selectRaw('SUM(sale_items.total) as sold_revenue')
             ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->where('sales.company_id', $companyId))
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('sales.company_id', $companyId))
             ->whereBetween('sales.created_at', [$monthStart, $monthEnd])
             ->groupBy('sale_items.product_name')
             ->get()
@@ -135,7 +161,7 @@ class DashboardController extends Controller
             ->selectRaw('SUM(sale_return_items.quantity) as returned_quantity')
             ->selectRaw('SUM(sale_return_items.total) as returned_revenue')
             ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_items.sale_return_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->where('sale_returns.company_id', $companyId))
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('sale_returns.company_id', $companyId))
             ->whereBetween('sale_returns.created_at', [$monthStart, $monthEnd])
             ->groupBy('sale_return_items.product_name')
             ->get()
@@ -166,7 +192,7 @@ class DashboardController extends Controller
                         : 0,
                 ];
             })
-            ->filter(fn($item) => $item->total_quantity > 0.0001 || $item->total_revenue > 0.009)
+            ->filter(fn ($item) => $item->total_quantity > 0.0001 || $item->total_revenue > 0.009)
             ->sortByDesc('total_quantity')
             ->take(5)
             ->values();
@@ -176,7 +202,7 @@ class DashboardController extends Controller
             ->selectRaw('COUNT(sales.id) as sale_count')
             ->selectRaw('SUM(sales.total) as gross_revenue')
             ->join('users', 'users.id', '=', 'sales.user_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->where('sales.company_id', $companyId))
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('sales.company_id', $companyId))
             ->whereBetween('sales.created_at', [$monthStart, $monthEnd])
             ->groupBy('users.id', 'users.name')
             ->get()
@@ -187,7 +213,7 @@ class DashboardController extends Controller
             ->selectRaw('SUM(sale_returns.total) as return_total')
             ->join('sales', 'sales.id', '=', 'sale_returns.sale_id')
             ->join('users', 'users.id', '=', 'sales.user_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->where('sale_returns.company_id', $companyId))
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('sale_returns.company_id', $companyId))
             ->whereBetween('sale_returns.created_at', [$monthStart, $monthEnd])
             ->groupBy('users.id', 'users.name')
             ->get()
@@ -211,36 +237,15 @@ class DashboardController extends Controller
                     'return_total' => $returnTotal,
                 ];
             })
-            ->filter(fn($cashier) => $cashier->sale_count > 0 || $cashier->return_total > 0.009)
+            ->filter(fn ($cashier) => $cashier->sale_count > 0 || $cashier->return_total > 0.009)
             ->sortByDesc('total_revenue')
             ->take(3)
             ->values();
 
-        $paymentBreakdown = SalePayment::query()
-            ->select('sale_payments.payment_type')
-            ->selectRaw('SUM(sale_payments.amount_in_tl) as total_amount')
-            ->selectRaw('COUNT(*) as payment_count')
-            ->join('sales', 'sales.id', '=', 'sale_payments.sale_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->where('sales.company_id', $companyId))
-            ->whereBetween('sales.created_at', [$monthStart, $monthEnd])
-            ->groupBy('sale_payments.payment_type')
-            ->orderByDesc('total_amount')
-            ->get();
-
-        $monthPaymentVolume = $paymentBreakdown->sum(fn($payment) => (float) $payment->total_amount);
-
-        $paymentBreakdown = $paymentBreakdown->map(function ($payment) use ($monthPaymentVolume) {
-                $payment->total_amount = (float) $payment->total_amount;
-                $payment->payment_count = (int) $payment->payment_count;
-                $payment->label = SalePayment::paymentLabel($payment->payment_type);
-                $payment->share = $monthPaymentVolume > 0
-                    ? ($payment->total_amount / $monthPaymentVolume) * 100
-                    : 0;
-
-                return $payment;
-            });
+        $paymentBreakdown = $this->buildPaymentBreakdown($isSuperAdmin, $companyId, $monthStart, $monthEnd);
 
         return view('dashboard', compact(
+            'canViewDashboardMetrics',
             'todaySales',
             'todayRevenue',
             'todayReturnTotal',
@@ -259,5 +264,76 @@ class DashboardController extends Controller
             'topCashiers',
             'paymentBreakdown'
         ));
+    }
+
+    private function buildPaymentBreakdown(bool $isSuperAdmin, ?int $companyId, $monthStart, $monthEnd): Collection
+    {
+        $grossPayments = SalePayment::query()
+            ->select('sale_payments.payment_type')
+            ->selectRaw('SUM(sale_payments.amount_in_tl) as gross_amount')
+            ->selectRaw('COUNT(*) as payment_count')
+            ->join('sales', 'sales.id', '=', 'sale_payments.sale_id')
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('sales.company_id', $companyId))
+            ->whereBetween('sales.created_at', [$monthStart, $monthEnd])
+            ->groupBy('sale_payments.payment_type')
+            ->get()
+            ->keyBy('payment_type');
+
+        $returnAllocations = SaleReturn::query()
+            ->with([
+                'sale.payments' => fn ($query) => $query->select('id', 'sale_id', 'payment_type', 'amount_in_tl'),
+            ])
+            ->when(! $isSuperAdmin, fn ($query) => $query->where('company_id', $companyId))
+            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->get()
+            ->reduce(function (array $carry, SaleReturn $saleReturn) {
+                $payments = $saleReturn->sale?->payments ?? collect();
+                $paymentBase = (float) $payments->sum(fn ($payment) => (float) $payment->amount_in_tl);
+
+                if ($paymentBase <= 0) {
+                    return $carry;
+                }
+
+                foreach ($payments as $payment) {
+                    $paymentType = $payment->payment_type;
+                    $paymentAmount = (float) $payment->amount_in_tl;
+                    $allocatedReturn = ((float) $saleReturn->total * $paymentAmount) / $paymentBase;
+
+                    $carry[$paymentType] = ($carry[$paymentType] ?? 0) + $allocatedReturn;
+                }
+
+                return $carry;
+            }, []);
+
+        $paymentBreakdown = $grossPayments->keys()
+            ->merge(array_keys($returnAllocations))
+            ->unique()
+            ->map(function ($paymentType) use ($grossPayments, $returnAllocations) {
+                $grossPayment = $grossPayments->get($paymentType);
+                $grossAmount = (float) ($grossPayment->gross_amount ?? 0);
+                $returnTotal = (float) ($returnAllocations[$paymentType] ?? 0);
+
+                return (object) [
+                    'payment_type' => $paymentType,
+                    'label' => SalePayment::paymentLabel($paymentType),
+                    'payment_count' => (int) ($grossPayment->payment_count ?? 0),
+                    'gross_amount' => $grossAmount,
+                    'return_total' => $returnTotal,
+                    'total_amount' => $grossAmount - $returnTotal,
+                ];
+            })
+            ->filter(fn ($payment) => abs($payment->gross_amount) > 0.009 || abs($payment->return_total) > 0.009 || $payment->payment_count > 0)
+            ->sortByDesc('total_amount')
+            ->values();
+
+        $monthPaymentVolume = $paymentBreakdown->sum(fn ($payment) => max($payment->total_amount, 0));
+
+        return $paymentBreakdown->map(function ($payment) use ($monthPaymentVolume) {
+            $payment->share = $monthPaymentVolume > 0 && $payment->total_amount > 0
+                ? ($payment->total_amount / $monthPaymentVolume) * 100
+                : 0;
+
+            return $payment;
+        });
     }
 }

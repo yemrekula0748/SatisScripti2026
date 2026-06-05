@@ -22,7 +22,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/dashboard', [DashboardController::class, 'index'])
-        ->middleware('permission:dashboard.view')
         ->name('dashboard');
 
     // Settings

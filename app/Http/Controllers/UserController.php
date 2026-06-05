@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Spatie\Permission\PermissionRegistrar;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -23,7 +24,7 @@ class UserController extends Controller
 
     public function index()
     {
-        $query = User::with('roles', 'permissions', 'company')
+        $query = User::with('roles.permissions', 'permissions', 'company')
             ->where('is_super_admin', false);
 
         if (!$this->isSuperAdmin()) {
@@ -32,10 +33,11 @@ class UserController extends Controller
 
         $users = $query->get();
         $permissions = Permission::where('name', 'not like', 'companies.%')->get();
-        $roles = Role::where('name', '!=', 'super-admin')->get();
+        $roles = Role::with('permissions')->where('name', '!=', 'super-admin')->get();
         $companies = $this->isSuperAdmin() ? Company::where('is_active', true)->orderBy('name')->get() : collect();
+        $rolePermissionMatrix = $roles->mapWithKeys(fn($role) => [$role->name => $role->permissions->pluck('name')->values()]);
 
-        return view('users.index', compact('users', 'permissions', 'roles', 'companies'));
+        return view('users.index', compact('users', 'permissions', 'roles', 'companies', 'rolePermissionMatrix'));
     }
 
     public function store(Request $request)
@@ -55,6 +57,20 @@ class UserController extends Controller
         $data = $request->validate($rules);
 
         $companyId = $this->isSuperAdmin() ? $data['company_id'] : $this->companyId();
+        $editablePermissionNames = Permission::where('name', 'not like', 'companies.%')->pluck('name')->all();
+        $role = Role::with('permissions')->findByName($data['role'], 'web');
+        $selectedPermissions = collect($request->input('permissions', []))
+            ->filter(fn($permission) => in_array($permission, $editablePermissionNames, true))
+            ->values()
+            ->all();
+
+        if (empty($selectedPermissions)) {
+            $selectedPermissions = $role->permissions
+                ->pluck('name')
+                ->filter(fn($permission) => in_array($permission, $editablePermissionNames, true))
+                ->values()
+                ->all();
+        }
 
         $user = User::create([
             'company_id' => $companyId,
@@ -62,13 +78,12 @@ class UserController extends Controller
             'email' => $data['email'],
             'password' => bcrypt($data['password']),
             'is_active' => true,
+            'blocked_permissions' => array_values(array_diff($editablePermissionNames, $selectedPermissions)),
         ]);
 
         $user->assignRole($data['role']);
-
-        if (!empty($data['permissions'])) {
-            $user->syncPermissions($data['permissions']);
-        }
+        $user->syncPermissions($selectedPermissions);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         return back()->with('success', 'Kullanıcı eklendi.');
     }
@@ -93,11 +108,26 @@ class UserController extends Controller
         }
 
         $data = $request->validate($rules);
+        $editablePermissionNames = Permission::where('name', 'not like', 'companies.%')->pluck('name')->all();
+        $role = Role::with('permissions')->findByName($data['role'], 'web');
+        $selectedPermissions = collect($request->input('permissions', []))
+            ->filter(fn($permission) => in_array($permission, $editablePermissionNames, true))
+            ->values()
+            ->all();
+
+        if (empty($selectedPermissions)) {
+            $selectedPermissions = $role->permissions
+                ->pluck('name')
+                ->filter(fn($permission) => in_array($permission, $editablePermissionNames, true))
+                ->values()
+                ->all();
+        }
 
         $updateData = [
             'name' => $data['name'],
             'email' => $data['email'],
             'is_active' => $request->boolean('is_active'),
+            'blocked_permissions' => array_values(array_diff($editablePermissionNames, $selectedPermissions)),
         ];
 
         if ($this->isSuperAdmin()) {
@@ -110,7 +140,8 @@ class UserController extends Controller
 
         $user->update($updateData);
         $user->syncRoles([$data['role']]);
-        $user->syncPermissions($data['permissions'] ?? []);
+        $user->syncPermissions($selectedPermissions);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         return back()->with('success', 'Kullanıcı güncellendi.');
     }
@@ -122,6 +153,7 @@ class UserController extends Controller
         }
         abort_if($user->id === Auth::id(), 403, 'Kendinizi silemezsiniz.');
         $user->delete();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
         return back()->with('success', 'Kullanıcı silindi.');
     }
 }

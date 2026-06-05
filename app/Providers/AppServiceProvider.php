@@ -16,6 +16,10 @@ class AppServiceProvider extends ServiceProvider
             if ($user->is_super_admin) {
                 return true;
             }
+
+            if (method_exists($user, 'hasBlockedPermission') && $user->hasBlockedPermission($ability)) {
+                return false;
+            }
         });
     }
 }
