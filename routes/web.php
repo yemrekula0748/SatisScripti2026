@@ -43,6 +43,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/sales/history', [SaleController::class, 'history'])
         ->middleware('permission:sales.history')
         ->name('sales.history');
+    Route::post('/sales/{sale}/refund', [SaleController::class, 'refund'])
+        ->middleware('permission:sales.history')
+        ->name('sales.refund');
     Route::post('/sales/currency-rates', [SaleController::class, 'saveCurrencyRates'])
         ->middleware('permission:sales.view')
         ->name('sales.currency-rates.save');

@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
+use App\Models\SaleReturn;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -116,7 +117,7 @@ class SaleController extends Controller
 
     public function history(Request $request)
     {
-        $query = Sale::with(['items', 'payments', 'user'])
+        $query = Sale::with(['items.returnItems', 'payments', 'user', 'returns.items', 'returns.user'])
             ->where('company_id', $this->companyId());
 
         if ($request->filled('search')) {
@@ -131,6 +132,122 @@ class SaleController extends Controller
 
         $sales = $query->latest()->paginate(30)->withQueryString();
         return view('sales.history', compact('sales'));
+    }
+
+    public function refund(Request $request, Sale $sale)
+    {
+        abort_if($sale->company_id !== $this->companyId(), 404);
+
+        $data = $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.sale_item_id' => 'required|integer',
+            'items.*.quantity' => 'required|numeric|min:0.001',
+        ]);
+
+        $requestedItems = collect($data['items'])
+            ->map(function ($item) {
+                return [
+                    'sale_item_id' => (int) $item['sale_item_id'],
+                    'quantity' => round((float) $item['quantity'], 3),
+                ];
+            })
+            ->filter(fn($item) => $item['quantity'] > 0)
+            ->values();
+
+        if ($requestedItems->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'İade için en az bir ürün ve miktar seçin.',
+            ], 422);
+        }
+
+        if ($requestedItems->pluck('sale_item_id')->duplicates()->isNotEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Aynı ürün birden fazla kez gönderildi. Lütfen tekrar deneyin.',
+            ], 422);
+        }
+
+        $sale->loadMissing(['items.returnItems']);
+        $saleItems = $sale->items->keyBy('id');
+        $refundRows = collect();
+        $subtotal = 0;
+
+        foreach ($requestedItems as $requestedItem) {
+            /** @var \App\Models\SaleItem|null $saleItem */
+            $saleItem = $saleItems->get($requestedItem['sale_item_id']);
+
+            if (!$saleItem) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Satış kalemlerinden biri bulunamadı.',
+                ], 422);
+            }
+
+            $alreadyRefundedQuantity = round((float) $saleItem->returnItems->sum('quantity'), 3);
+            $originalQuantity = round((float) $saleItem->quantity, 3);
+            $maxRefundableQuantity = round(max($originalQuantity - $alreadyRefundedQuantity, 0), 3);
+
+            if ($requestedItem['quantity'] - $maxRefundableQuantity > 0.0001) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "{$saleItem->product_name} için iade miktarı satıştaki kalan adedi aşıyor.",
+                ], 422);
+            }
+
+            $lineSubtotal = round((float) $saleItem->unit_price * $requestedItem['quantity'], 2);
+            $subtotal += $lineSubtotal;
+
+            $refundRows->push([
+                'sale_item' => $saleItem,
+                'quantity' => $requestedItem['quantity'],
+                'line_subtotal' => $lineSubtotal,
+            ]);
+        }
+
+        $discountPercent = (float) $sale->discount_percent;
+        $discountAmount = round($subtotal * ($discountPercent / 100), 2);
+        $total = round($subtotal - $discountAmount, 2);
+
+        DB::transaction(function () use ($sale, $refundRows, $subtotal, $discountPercent, $discountAmount, $total) {
+            $saleReturn = SaleReturn::create([
+                'sale_id' => $sale->id,
+                'company_id' => $sale->company_id,
+                'user_id' => Auth::id(),
+                'subtotal' => $subtotal,
+                'discount_percent' => $discountPercent,
+                'discount_amount' => $discountAmount,
+                'total' => $total,
+            ]);
+
+            foreach ($refundRows as $refundRow) {
+                /** @var \App\Models\SaleItem $saleItem */
+                $saleItem = $refundRow['sale_item'];
+
+                $saleReturn->items()->create([
+                    'sale_item_id' => $saleItem->id,
+                    'product_id' => $saleItem->product_id,
+                    'product_name' => $saleItem->product_name,
+                    'product_barcode' => $saleItem->product_barcode,
+                    'unit' => $saleItem->unit,
+                    'unit_price' => $saleItem->unit_price,
+                    'quantity' => $refundRow['quantity'],
+                    'total' => $refundRow['line_subtotal'],
+                ]);
+
+                if ($saleItem->product_id) {
+                    Product::where('company_id', $sale->company_id)
+                        ->where('id', $saleItem->product_id)
+                        ->increment('stock', $refundRow['quantity']);
+                }
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'İade başarıyla kaydedildi.',
+            'refund_total' => $total,
+        ]);
     }
 
     public function saveCurrencyRates(Request $request)
