@@ -21,9 +21,12 @@
     <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
         <div class="flex items-center justify-between">
             <div>
-                <p class="text-sm text-slate-500">Bugünkü Ciro</p>
+                <p class="text-sm text-slate-500">Bugünkü Net Ciro</p>
                 <p class="text-2xl font-bold text-slate-800 mt-1">{{ number_format($todayRevenue, 2, ',', '.') }} ₺</p>
-                <p class="text-xs text-slate-400 mt-2">Bugün kasaya giren toplam tutar</p>
+                <p class="text-xs text-slate-400 mt-2">Satışlar eksi bugün yapılan iadeler</p>
+                @if($todayReturnTotal > 0)
+                <p class="text-xs text-rose-500 mt-1">Bugünkü iade: −{{ number_format($todayReturnTotal, 2, ',', '.') }} ₺</p>
+                @endif
             </div>
             <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
                 <i class="fas fa-wallet text-emerald-600"></i>
@@ -47,9 +50,12 @@
     <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
         <div class="flex items-center justify-between">
             <div>
-                <p class="text-sm text-slate-500">Aylık Ciro</p>
+                <p class="text-sm text-slate-500">Aylık Net Ciro</p>
                 <p class="text-2xl font-bold text-slate-800 mt-1">{{ number_format($monthRevenue, 2, ',', '.') }} ₺</p>
-                <p class="text-xs text-slate-400 mt-2">Bu ay tamamlanan tüm satışlar</p>
+                <p class="text-xs text-slate-400 mt-2">Bu ay satışlar eksi iadeler</p>
+                @if($monthReturnTotal > 0)
+                <p class="text-xs text-rose-500 mt-1">Aylık iade: −{{ number_format($monthReturnTotal, 2, ',', '.') }} ₺</p>
+                @endif
             </div>
             <div class="w-12 h-12 bg-fuchsia-100 rounded-xl flex items-center justify-center">
                 <i class="fas fa-chart-line text-fuchsia-600"></i>
@@ -81,7 +87,7 @@
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p class="text-xs uppercase tracking-[0.2em] text-slate-400">7 Gün</p>
                 <p class="text-2xl font-bold text-slate-800 mt-2">{{ number_format($last7DaysRevenue, 2, ',', '.') }} ₺</p>
-                <p class="text-sm text-slate-500 mt-1">son 7 gün cirosu</p>
+                <p class="text-sm text-slate-500 mt-1">son 7 gün net cirosu</p>
             </div>
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Müşteri</p>

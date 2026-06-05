@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
+use App\Models\SaleReturn;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
@@ -26,13 +27,22 @@ class DashboardController extends Controller
         $salesQuery = Sale::query()
             ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId));
 
+        $returnsQuery = SaleReturn::query()
+            ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId));
+
         $todaySales = (clone $salesQuery)
             ->whereDate('created_at', $today)
             ->count();
 
-        $todayRevenue = (clone $salesQuery)
+        $todayGrossRevenue = (clone $salesQuery)
             ->whereDate('created_at', $today)
             ->sum('total');
+
+        $todayReturnTotal = (clone $returnsQuery)
+            ->whereDate('created_at', $today)
+            ->sum('total');
+
+        $todayRevenue = $todayGrossRevenue - $todayReturnTotal;
 
         $productCount = Product::query()
             ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId))
@@ -43,23 +53,41 @@ class DashboardController extends Controller
             ->when(!$isSuperAdmin, fn($q) => $q->where('company_id', $companyId))
             ->count();
 
-        $monthRevenue = (clone $salesQuery)
+        $monthGrossRevenue = (clone $salesQuery)
             ->whereBetween('created_at', [$monthStart, $monthEnd])
             ->sum('total');
+
+        $monthReturnTotal = (clone $returnsQuery)
+            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->sum('total');
+
+        $monthRevenue = $monthGrossRevenue - $monthReturnTotal;
 
         $monthSalesCount = (clone $salesQuery)
             ->whereBetween('created_at', [$monthStart, $monthEnd])
             ->count();
 
-        $averageBasket = $todaySales > 0 ? $todayRevenue / $todaySales : 0;
+        $averageBasket = $todaySales > 0 ? $todayGrossRevenue / $todaySales : 0;
 
-        $last7DaysRevenue = (clone $salesQuery)
+        $last7DaysGrossRevenue = (clone $salesQuery)
             ->whereBetween('created_at', [$last7DaysStart, now()->endOfDay()])
             ->sum('total');
 
-        $previous7DaysRevenue = (clone $salesQuery)
+        $last7DaysReturnTotal = (clone $returnsQuery)
+            ->whereBetween('created_at', [$last7DaysStart, now()->endOfDay()])
+            ->sum('total');
+
+        $last7DaysRevenue = $last7DaysGrossRevenue - $last7DaysReturnTotal;
+
+        $previous7DaysGrossRevenue = (clone $salesQuery)
             ->whereBetween('created_at', [$previous7DaysStart, $previous7DaysEnd])
             ->sum('total');
+
+        $previous7DaysReturnTotal = (clone $returnsQuery)
+            ->whereBetween('created_at', [$previous7DaysStart, $previous7DaysEnd])
+            ->sum('total');
+
+        $previous7DaysRevenue = $previous7DaysGrossRevenue - $previous7DaysReturnTotal;
 
         $weeklyTrend = $previous7DaysRevenue > 0
             ? (($last7DaysRevenue - $previous7DaysRevenue) / $previous7DaysRevenue) * 100
@@ -148,9 +176,11 @@ class DashboardController extends Controller
         return view('dashboard', compact(
             'todaySales',
             'todayRevenue',
+            'todayReturnTotal',
             'productCount',
             'customerCount',
             'monthRevenue',
+            'monthReturnTotal',
             'monthSalesCount',
             'averageBasket',
             'last7DaysRevenue',
