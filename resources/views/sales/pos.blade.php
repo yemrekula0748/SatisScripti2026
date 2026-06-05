@@ -80,7 +80,7 @@
                     class="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 overflow-hidden max-h-72 overflow-y-auto">
                     <template x-for="(product, index) in searchResults" :key="product.id">
                         <div
-                            @click="addToCart(product); closeDropdown()"
+                            @click="selectProduct(product)"
                             @mouseenter="highlighted = index"
                             :class="highlighted === index ? 'bg-indigo-50 border-l-4 border-indigo-500' : 'border-l-4 border-transparent hover:bg-slate-50'"
                             class="flex items-center justify-between px-4 py-3 cursor-pointer transition-all border-b border-slate-50">
@@ -357,6 +357,16 @@ function posApp() {
             GBP: { name: 'Pound',  bg: 'bg-purple-100 text-purple-700'},
             RUB: { name: 'Ruble',  bg: 'bg-red-100 text-red-700'     },
         },
+        searchRequestId: 0,
+        scannerBuffer: '',
+        scannerStartedAt: 0,
+        scannerLastKeyAt: 0,
+        scannerMaxGapMs: 80,
+        scannerMaxDurationMs: 1500,
+        scannerMinLength: 6,
+        scannerSourceTarget: null,
+        scannerSourceValue: null,
+        globalScannerHandler: null,
 
         get subtotal() { return this.cart.reduce((s, i) => s + i.price * i.qty, 0); },
         get discountAmount() { return this.subtotal * (this.discountPercent / 100); },
@@ -377,6 +387,8 @@ function posApp() {
             this.updateClock();
             setInterval(() => this.updateClock(), 1000);
             this.$nextTick(() => this.$refs.searchInput?.focus());
+            this.globalScannerHandler = this.handleGlobalScannerKeydown.bind(this);
+            window.addEventListener('keydown', this.globalScannerHandler, true);
         },
 
         updateClock() {
@@ -387,31 +399,69 @@ function posApp() {
             return parseFloat(val || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         },
 
-        async searchProducts() {
-            if (!this.searchQuery.trim()) {
+        normalizeQuery(value = '') {
+            return String(value ?? '').trim();
+        },
+
+        async searchProducts(options = {}) {
+            const {
+                query = this.searchQuery,
+                autoSelectExact = false,
+            } = options;
+
+            const normalizedQuery = this.normalizeQuery(query);
+
+            if (!normalizedQuery) {
                 this.searchResults = [];
                 this.showDropdown = false;
-                return;
+                return { results: [], exactMatch: null };
             }
+
+            this.searchQuery = normalizedQuery;
+            const requestId = ++this.searchRequestId;
+
             try {
-                const resp = await fetch(`/api/products/search?q=${encodeURIComponent(this.searchQuery)}`, {
+                const resp = await fetch(`/api/products/search?q=${encodeURIComponent(normalizedQuery)}`, {
                     headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content }
                 });
-                this.searchResults = await resp.json();
+                const results = await resp.json();
+
+                if (requestId !== this.searchRequestId) {
+                    return { results: [], exactMatch: null, stale: true };
+                }
+
+                this.searchResults = results;
                 this.showDropdown = true;
                 this.highlighted = this.searchResults.length === 1 ? 0 : -1;
 
-                // Tek sonuç ve barkod tam eşleşmesi → otomatik ekle
-                if (this.searchResults.length === 1 && this.searchResults[0].barcode === this.searchQuery.trim()) {
-                    this.addToCart(this.searchResults[0]);
-                    this.closeDropdown();
+                const exactMatch = this.searchResults.find(product =>
+                    this.normalizeQuery(product.barcode) === normalizedQuery
+                ) ?? null;
+
+                if (autoSelectExact && exactMatch) {
+                    this.selectProduct(exactMatch);
                 }
-            } catch(e) {}
+
+                return { results: this.searchResults, exactMatch };
+            } catch(e) {
+                return { results: [], exactMatch: null, error: e };
+            }
         },
 
         closeDropdown() {
             this.showDropdown = false;
             this.highlighted = -1;
+        },
+
+        resetSearchState(options = {}) {
+            const { keepFocus = false } = options;
+            this.searchQuery = '';
+            this.searchResults = [];
+            this.closeDropdown();
+
+            if (keepFocus) {
+                this.$nextTick(() => this.$refs.searchInput?.focus());
+            }
         },
 
         highlightNext() {
@@ -423,15 +473,145 @@ function posApp() {
             this.highlighted = Math.max(this.highlighted - 1, 0);
         },
 
-        handleEnter() {
-            if (this.highlighted >= 0 && this.searchResults[this.highlighted]) {
-                this.addToCart(this.searchResults[this.highlighted]);
-            } else if (this.searchResults.length > 0) {
-                this.addToCart(this.searchResults[0]);
+        async handleEnter() {
+            const normalizedQuery = this.normalizeQuery(this.searchQuery);
+            if (!normalizedQuery) return;
+
+            if (this.searchResults.length === 0) {
+                const { exactMatch, results } = await this.searchProducts({
+                    query: normalizedQuery,
+                    autoSelectExact: true,
+                });
+
+                if (exactMatch) {
+                    return;
+                }
+
+                if (!results.length) {
+                    return;
+                }
             }
-            this.closeDropdown();
-            this.searchQuery = '';
-            this.searchResults = [];
+
+            if (this.highlighted >= 0 && this.searchResults[this.highlighted]) {
+                this.selectProduct(this.searchResults[this.highlighted]);
+            } else if (this.searchResults.length > 0) {
+                this.selectProduct(this.searchResults[0]);
+            }
+        },
+
+        isPrintableScannerKey(event) {
+            return event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey;
+        },
+
+        resetScannerBuffer() {
+            this.scannerBuffer = '';
+            this.scannerStartedAt = 0;
+            this.scannerLastKeyAt = 0;
+            this.scannerSourceTarget = null;
+            this.scannerSourceValue = null;
+        },
+
+        isScannerSequence(now = Date.now()) {
+            if (!this.scannerBuffer) return false;
+
+            return this.scannerBuffer.length >= this.scannerMinLength
+                && (now - this.scannerStartedAt) <= this.scannerMaxDurationMs;
+        },
+
+        isEditableElement(element) {
+            if (!element || element === this.$refs.searchInput) return false;
+
+            const tagName = element.tagName;
+            return element.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA';
+        },
+
+        restoreScannerSourceTarget() {
+            if (!this.isEditableElement(this.scannerSourceTarget)) {
+                return;
+            }
+
+            if ('value' in this.scannerSourceTarget) {
+                this.scannerSourceTarget.value = this.scannerSourceValue ?? '';
+                this.scannerSourceTarget.dispatchEvent(new Event('input', { bubbles: true }));
+            } else if (this.scannerSourceTarget.isContentEditable) {
+                this.scannerSourceTarget.textContent = this.scannerSourceValue ?? '';
+            }
+        },
+
+        async processScannerInput(scannedValue) {
+            const normalizedQuery = this.normalizeQuery(scannedValue);
+            if (!normalizedQuery) return;
+
+            this.searchQuery = normalizedQuery;
+            this.$nextTick(() => this.$refs.searchInput?.focus());
+
+            const { exactMatch, results } = await this.searchProducts({
+                query: normalizedQuery,
+                autoSelectExact: true,
+            });
+
+            if (exactMatch) {
+                return;
+            }
+
+            if (results.length === 1) {
+                this.selectProduct(results[0]);
+            }
+        },
+
+        handleGlobalScannerKeydown(event) {
+            if (this.showCurrencyModal) {
+                this.resetScannerBuffer();
+                return;
+            }
+
+            if (event.target === this.$refs.searchInput) {
+                return;
+            }
+
+            const now = Date.now();
+
+            if (this.isPrintableScannerKey(event)) {
+                const isContinuation = !this.scannerBuffer || (now - this.scannerLastKeyAt) <= this.scannerMaxGapMs;
+
+                if (!isContinuation) {
+                    this.scannerBuffer = '';
+                    this.scannerStartedAt = now;
+                    this.scannerSourceTarget = null;
+                    this.scannerSourceValue = null;
+                }
+
+                if (!this.scannerBuffer) {
+                    this.scannerStartedAt = now;
+                    this.scannerSourceTarget = event.target;
+                    this.scannerSourceValue = this.isEditableElement(event.target)
+                        ? ('value' in event.target ? event.target.value : event.target.textContent)
+                        : null;
+                }
+
+                this.scannerBuffer += event.key;
+                this.scannerLastKeyAt = now;
+                return;
+            }
+
+            if ((event.key === 'Enter' || event.key === 'Tab') && this.isScannerSequence(now)) {
+                const scannedValue = this.scannerBuffer;
+                this.restoreScannerSourceTarget();
+                this.resetScannerBuffer();
+                event.preventDefault();
+                event.stopPropagation();
+                this.processScannerInput(scannedValue);
+                return;
+            }
+
+            if (!['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) {
+                this.resetScannerBuffer();
+            }
+        },
+
+        selectProduct(product) {
+            this.addToCart(product);
+            this.resetSearchState({ keepFocus: true });
         },
 
         addToCart(product) {
