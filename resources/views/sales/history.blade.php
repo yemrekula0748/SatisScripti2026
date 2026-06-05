@@ -392,7 +392,7 @@
                                         <input
                                             type="number"
                                             min="0"
-                                            step="0.001"
+                                            :step="refundStep(item)"
                                             :max="item.remaining_quantity"
                                             x-model.number="item.refund_quantity"
                                             @change="normalizeRefundQuantity(item)"
@@ -473,6 +473,14 @@ function salesHistoryApp() {
             return Math.round(Number(value || 0) * 1000) / 1000;
         },
 
+        isWholeUnit(item) {
+            return ['adet', 'kutu', 'paket'].includes(String(item?.unit || '').toLowerCase());
+        },
+
+        refundStep(item) {
+            return this.isWholeUnit(item) ? 1 : 0.001;
+        },
+
         formatPrice(value) {
             return Number(value || 0).toLocaleString('tr-TR', {
                 minimumFractionDigits: 2,
@@ -518,12 +526,18 @@ function salesHistoryApp() {
         },
 
         normalizeRefundQuantity(item) {
-            let qty = this.roundQty(item.refund_quantity);
+            let qty = this.isWholeUnit(item)
+                ? Math.round(Number(item.refund_quantity || 0))
+                : this.roundQty(item.refund_quantity);
+
             if (!Number.isFinite(qty) || qty < 0) {
                 qty = 0;
             }
 
-            const maxQty = this.roundQty(item.remaining_quantity);
+            const maxQty = this.isWholeUnit(item)
+                ? Math.floor(Number(item.remaining_quantity || 0))
+                : this.roundQty(item.remaining_quantity);
+
             if (qty > maxQty) {
                 qty = maxQty;
             }
