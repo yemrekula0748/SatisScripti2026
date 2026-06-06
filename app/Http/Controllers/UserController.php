@@ -58,7 +58,7 @@ class UserController extends Controller
 
         $companyId = $this->isSuperAdmin() ? $data['company_id'] : $this->companyId();
         $editablePermissionNames = Permission::where('name', 'not like', 'companies.%')->pluck('name')->all();
-        $role = Role::with('permissions')->findByName($data['role'], 'web');
+        $role = Role::findByName($data['role'], 'web')->load('permissions');
         $selectedPermissions = collect($request->input('permissions', []))
             ->filter(fn($permission) => in_array($permission, $editablePermissionNames, true))
             ->values()
@@ -109,7 +109,7 @@ class UserController extends Controller
 
         $data = $request->validate($rules);
         $editablePermissionNames = Permission::where('name', 'not like', 'companies.%')->pluck('name')->all();
-        $role = Role::with('permissions')->findByName($data['role'], 'web');
+        $role = Role::findByName($data['role'], 'web')->load('permissions');
         $selectedPermissions = collect($request->input('permissions', []))
             ->filter(fn($permission) => in_array($permission, $editablePermissionNames, true))
             ->values()
