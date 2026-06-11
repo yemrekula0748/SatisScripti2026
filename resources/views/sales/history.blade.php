@@ -58,6 +58,9 @@
             @php
                 $returnedTotal = (float) $sale->returns->sum('total');
                 $netTotal = max((float) $sale->total - $returnedTotal, 0);
+                $totalPaid = round((float) $sale->payments->sum('amount_in_tl'), 2);
+                $paymentShortage = round(max((float) $sale->total - $totalPaid, 0), 2);
+                $paymentChange = round(max($totalPaid - (float) $sale->total, 0), 2);
                 $hasRefundableItems = $sale->items->contains(function ($item) {
                     return ((float) $item->quantity - (float) $item->returnItems->sum('quantity')) > 0.0001;
                 });
@@ -93,6 +96,11 @@
                         @if($sale->discount_percent > 0)
                         <p class="text-xs text-orange-500">%{{ number_format($sale->discount_percent, 0) }} indirim</p>
                         @endif
+                        @if($paymentShortage > 0.009)
+                        <p class="text-xs text-amber-600 mt-1">Eksik Tahsilat: {{ number_format($paymentShortage, 2, ',', '.') }} ₺</p>
+                        @elseif($paymentChange > 0.009)
+                        <p class="text-xs text-green-600 mt-1">Para Üstü: {{ number_format($paymentChange, 2, ',', '.') }} ₺</p>
+                        @endif
                         @if($returnedTotal > 0)
                         <p class="text-xs text-rose-500 mt-1">İade: −{{ number_format($returnedTotal, 2, ',', '.') }} ₺</p>
                         <p class="text-xs text-slate-400">Net: {{ number_format($netTotal, 2, ',', '.') }} ₺</p>
@@ -100,7 +108,7 @@
                     </td>
                     <td class="px-4 py-3">
                         <div class="flex flex-wrap gap-1">
-                            @foreach($sale->payments as $pay)
+                            @forelse($sale->payments as $pay)
                             @php
                                 $colors = [
                                     'TL' => 'bg-blue-100 text-blue-700',
@@ -116,7 +124,11 @@
                             <span class="px-2 py-0.5 rounded-full text-xs font-medium {{ $cls }}">
                                 {{ \App\Models\SalePayment::paymentLabel($pay->payment_type) }}
                             </span>
-                            @endforeach
+                            @empty
+                            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
+                                Ödeme yok
+                            </span>
+                            @endforelse
                         </div>
                     </td>
                     <td class="px-4 py-3">
@@ -208,7 +220,7 @@
                                             </tr>
                                         </thead>
                                         <tbody class="divide-y divide-slate-100">
-                                            @foreach($sale->payments as $pay)
+                                            @forelse($sale->payments as $pay)
                                             <tr>
                                                 <td class="py-1 font-medium text-slate-700">
                                                     {{ \App\Models\SalePayment::paymentLabel($pay->payment_type) }}
@@ -227,21 +239,27 @@
                                                 </td>
                                                 <td class="py-1 text-right font-semibold text-slate-800">{{ number_format($pay->amount_in_tl, 2, ',', '.') }} ₺</td>
                                             </tr>
-                                            @endforeach
+                                            @empty
+                                            <tr>
+                                                <td colspan="4" class="py-3 text-center text-slate-400">Ödeme kaydı girilmedi.</td>
+                                            </tr>
+                                            @endforelse
                                         </tbody>
                                         <tfoot class="border-t border-slate-200">
-                                            @php
-                                                $totalPaid = $sale->payments->sum('amount_in_tl');
-                                                $change = $totalPaid - $sale->total;
-                                            @endphp
                                             <tr>
                                                 <td colspan="3" class="pt-1 font-semibold text-slate-700">Ödenen Toplam (TL)</td>
                                                 <td class="pt-1 text-right font-bold text-slate-800">{{ number_format($totalPaid, 2, ',', '.') }} ₺</td>
                                             </tr>
-                                            @if($change > 0.009)
+                                            @if($paymentShortage > 0.009)
+                                            <tr>
+                                                <td colspan="3" class="pt-1 font-semibold text-amber-600">Eksik Tahsilat</td>
+                                                <td class="pt-1 text-right font-bold text-amber-600">{{ number_format($paymentShortage, 2, ',', '.') }} ₺</td>
+                                            </tr>
+                                            @endif
+                                            @if($paymentChange > 0.009)
                                             <tr>
                                                 <td colspan="3" class="pt-1 font-semibold text-green-600">Para Üstü</td>
-                                                <td class="pt-1 text-right font-bold text-green-600">{{ number_format($change, 2, ',', '.') }} ₺</td>
+                                                <td class="pt-1 text-right font-bold text-green-600">{{ number_format($paymentChange, 2, ',', '.') }} ₺</td>
                                             </tr>
                                             @endif
                                         </tfoot>

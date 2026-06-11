@@ -252,20 +252,24 @@
             </template>
             <div class="flex justify-between text-xs pt-1 border-t border-slate-100">
                 <span class="text-slate-500">Ödenen:</span>
-                <span :class="paymentTotal >= total && total > 0 ? 'text-green-600 font-bold' : 'text-red-500 font-bold'"
+                <span :class="hasPaymentShortage ? 'text-amber-600 font-bold' : 'text-green-600 font-bold'"
                       x-text="formatPrice(paymentTotal) + ' ₺'"></span>
             </div>
-            <div x-show="paymentTotal > total && total > 0" class="flex justify-between text-xs text-green-600 font-medium">
+            <div x-show="hasPaymentShortage" class="flex justify-between text-xs text-amber-600 font-medium">
+                <span>Eksik Tahsilat:</span>
+                <span x-text="formatPrice(paymentShortage) + ' ₺'"></span>
+            </div>
+            <div x-show="hasPaymentChange" class="flex justify-between text-xs text-green-600 font-medium">
                 <span>Para Üstü:</span>
-                <span x-text="formatPrice(paymentTotal - total) + ' ₺'"></span>
+                <span x-text="formatPrice(paymentChange) + ' ₺'"></span>
             </div>
         </div>
 
         {{-- Butonlar --}}
         <div class="px-4 pb-4 pt-2 space-y-2">
             <button @click="completeSale()"
-                :disabled="cart.length === 0 || paymentTotal < total - 0.01"
-                :class="cart.length === 0 || paymentTotal < total - 0.01 ? 'opacity-40 cursor-not-allowed bg-green-500' : 'bg-green-500 hover:bg-green-600 shadow-md shadow-green-200'"
+                :disabled="cart.length === 0"
+                :class="cart.length === 0 ? 'opacity-40 cursor-not-allowed bg-green-500' : hasPaymentShortage ? 'bg-amber-500 hover:bg-amber-600 shadow-md shadow-amber-200' : 'bg-green-500 hover:bg-green-600 shadow-md shadow-green-200'"
                 class="w-full text-white font-semibold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 text-sm">
                 <i class="fas fa-check-circle"></i> Satışı Tamamla
             </button>
@@ -380,7 +384,19 @@ function posApp() {
                     sum += amount * rate;
                 }
             }
-            return sum;
+            return Math.round(sum * 100) / 100;
+        },
+        get paymentShortage() {
+            return Math.max(Math.round((this.total - this.paymentTotal) * 100) / 100, 0);
+        },
+        get paymentChange() {
+            return Math.max(Math.round((this.paymentTotal - this.total) * 100) / 100, 0);
+        },
+        get hasPaymentShortage() {
+            return this.total > 0 && this.paymentShortage > 0.009;
+        },
+        get hasPaymentChange() {
+            return this.total > 0 && this.paymentChange > 0.009;
         },
 
         init() {
@@ -745,10 +761,6 @@ function posApp() {
 
         async completeSale() {
             if (!this.cart.length) return;
-            if (this.paymentTotal < this.total - 0.01) {
-                Swal.fire({ icon: 'error', title: 'Yetersiz ödeme', text: `Eksik: ${this.formatPrice(this.total - this.paymentTotal)} ₺` });
-                return;
-            }
 
             const activePayments = Object.entries(this.payments)
                 .filter(([k, v]) => v > 0)
@@ -781,28 +793,34 @@ function posApp() {
                 const data = await resp.json();
 
                 if (data.success) {
-                    const change = this.paymentTotal - this.total;
+                    const totalPaid = this.paymentTotal;
+                    const change = this.paymentChange;
+                    const shortage = this.paymentShortage;
                     const paymentLabels = {
                         TL: 'Türk Lirası', EURO: 'Euro €', DOLAR: 'Dolar $',
                         RUBLE: 'Ruble ₽', PAUND: 'Pound £',
                         KREDI_KARTI: 'Kredi Kartı', BANKA_HAVALE: 'Banka Havale',
                     };
-                    let payRows = activePayments.map(p => {
-                        const label = paymentLabels[p.payment_type] || p.payment_type;
-                        const inTl = p.amount * p.exchange_rate;
-                        if (p.exchange_rate === 1) {
-                            return `<tr><td class="text-left text-slate-600 py-0.5">${label}</td><td class="text-right font-semibold pl-4">${this.formatPrice(p.amount)} ₺</td></tr>`;
-                        } else {
+                    const payRows = activePayments.length
+                        ? activePayments.map(p => {
+                            const label = paymentLabels[p.payment_type] || p.payment_type;
+                            const inTl = p.amount * p.exchange_rate;
+                            if (p.exchange_rate === 1) {
+                                return `<tr><td class="text-left text-slate-600 py-0.5">${label}</td><td class="text-right font-semibold pl-4">${this.formatPrice(p.amount)} ₺</td></tr>`;
+                            }
+
                             return `<tr><td class="text-left text-slate-600 py-0.5">${label}</td><td class="text-right font-semibold pl-4">${this.formatPrice(p.amount)} (≈${this.formatPrice(inTl)} ₺)</td></tr>`;
-                        }
-                    }).join('');
-                    const changeRow = change > 0.009 ? `<tr class="border-t border-slate-200"><td class="text-left text-green-600 font-semibold pt-1">Para Üstü</td><td class="text-right font-bold text-green-600 pl-4 pt-1">${this.formatPrice(change)} ₺</td></tr>` : '';
+                        }).join('')
+                        : '<tr><td class="text-left text-slate-400 py-0.5">Ödeme</td><td class="text-right text-slate-500 pl-4">Kayıt girilmedi</td></tr>';
+                    const totalPaidRow = `<tr class="border-t border-slate-200"><td class="text-left text-slate-600 font-semibold pt-1">Ödenen Toplam</td><td class="text-right font-bold text-slate-800 pl-4 pt-1">${this.formatPrice(totalPaid)} ₺</td></tr>`;
+                    const shortageRow = shortage > 0.009 ? `<tr><td class="text-left text-amber-600 font-semibold pt-1">Eksik Tahsilat</td><td class="text-right font-bold text-amber-600 pl-4 pt-1">${this.formatPrice(shortage)} ₺</td></tr>` : '';
+                    const changeRow = change > 0.009 ? `<tr><td class="text-left text-green-600 font-semibold pt-1">Para Üstü</td><td class="text-right font-bold text-green-600 pl-4 pt-1">${this.formatPrice(change)} ₺</td></tr>` : '';
                     await Swal.fire({
                         icon: 'success',
                         title: 'Satış Tamamlandı!',
                         html: `
                             <p class="text-2xl font-bold text-indigo-700 mb-3">${this.formatPrice(this.total)} ₺</p>
-                            <table class="w-full text-sm">${payRows}${changeRow}</table>
+                            <table class="w-full text-sm">${payRows}${totalPaidRow}${shortageRow}${changeRow}</table>
                         `,
                         confirmButtonText: '<i class="fas fa-check"></i> Tamam',
                         confirmButtonColor: '#4f46e5',

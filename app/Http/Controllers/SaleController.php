@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Company;
 use App\Models\CurrencyRate;
 use App\Models\Customer;
 use App\Models\Product;
@@ -22,14 +23,15 @@ class SaleController extends Controller
         if ($user->company_id) {
             return $user->company_id;
         }
+
         // Super admin ise session'dan şirket seç, yoksa ilk şirketi al
-        return session('pos_company_id', \App\Models\Company::first()?->id ?? 1);
+        return session('pos_company_id', Company::first()?->id ?? 1);
     }
 
     public function pos()
     {
         $companyId = $this->companyId();
-        $company = \App\Models\Company::find($companyId);
+        $company = Company::find($companyId);
         $customers = Customer::where('company_id', $companyId)->orderBy('name')->get();
         $rates = CurrencyRate::where('company_id', $companyId)->get()->keyBy('currency');
 
@@ -49,7 +51,7 @@ class SaleController extends Controller
             'items.*.unit_price' => 'required|numeric|min:0',
             'items.*.quantity' => 'required|numeric|min:0.001',
             'items.*.unit' => 'required|string',
-            'payments' => 'required|array|min:1',
+            'payments' => 'nullable|array',
             'payments.*.payment_type' => 'required|string',
             'payments.*.amount' => 'required|numeric|min:0.01',
             'payments.*.exchange_rate' => 'nullable|numeric|min:0',
@@ -58,16 +60,16 @@ class SaleController extends Controller
         DB::transaction(function () use ($data) {
             $companyId = $this->companyId();
 
-            $subtotal = collect($data['items'])->sum(fn($i) => $i['unit_price'] * $i['quantity']);
+            $subtotal = collect($data['items'])->sum(fn ($i) => $i['unit_price'] * $i['quantity']);
             $discountPercent = $data['discount_percent'] ?? 0;
             $discountAmount = $subtotal * ($discountPercent / 100);
             $total = $subtotal - $discountAmount;
 
             $customerName = null;
-            if (!empty($data['customer_id'])) {
+            if (! empty($data['customer_id'])) {
                 $customer = Customer::where('company_id', $companyId)->find($data['customer_id']);
                 $customerName = $customer?->name;
-            } elseif (!empty($data['customer_name'])) {
+            } elseif (! empty($data['customer_name'])) {
                 $customerName = $data['customer_name'];
             }
 
@@ -94,13 +96,13 @@ class SaleController extends Controller
                     'total' => $item['unit_price'] * $item['quantity'],
                 ]);
 
-                if (!empty($item['product_id'])) {
+                if (! empty($item['product_id'])) {
                     Product::where('id', $item['product_id'])->where('company_id', $companyId)
                         ->decrement('stock', $item['quantity']);
                 }
             }
 
-            foreach ($data['payments'] as $payment) {
+            foreach (($data['payments'] ?? []) as $payment) {
                 $rate = $payment['exchange_rate'] ?? 1;
                 SalePayment::create([
                     'sale_id' => $sale->id,
@@ -121,7 +123,7 @@ class SaleController extends Controller
             ->where('company_id', $this->companyId());
 
         if ($request->filled('search')) {
-            $query->where('customer_name', 'like', '%' . $request->search . '%');
+            $query->where('customer_name', 'like', '%'.$request->search.'%');
         }
         if ($request->filled('date_from')) {
             $query->whereDate('created_at', '>=', $request->date_from);
@@ -131,6 +133,7 @@ class SaleController extends Controller
         }
 
         $sales = $query->latest()->paginate(30)->withQueryString();
+
         return view('sales.history', compact('sales'));
     }
 
@@ -151,7 +154,7 @@ class SaleController extends Controller
                     'quantity' => round((float) $item['quantity'], 3),
                 ];
             })
-            ->filter(fn($item) => $item['quantity'] > 0)
+            ->filter(fn ($item) => $item['quantity'] > 0)
             ->values();
 
         if ($requestedItems->isEmpty()) {
@@ -174,10 +177,10 @@ class SaleController extends Controller
         $subtotal = 0;
 
         foreach ($requestedItems as $requestedItem) {
-            /** @var \App\Models\SaleItem|null $saleItem */
+            /** @var SaleItem|null $saleItem */
             $saleItem = $saleItems->get($requestedItem['sale_item_id']);
 
-            if (!$saleItem) {
+            if (! $saleItem) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Satış kalemlerinden biri bulunamadı.',
@@ -221,7 +224,7 @@ class SaleController extends Controller
             ]);
 
             foreach ($refundRows as $refundRow) {
-                /** @var \App\Models\SaleItem $saleItem */
+                /** @var SaleItem $saleItem */
                 $saleItem = $refundRow['sale_item'];
 
                 $saleReturn->items()->create([
@@ -275,7 +278,7 @@ class SaleController extends Controller
         $rates = CurrencyRate::where('company_id', $this->companyId())
             ->get()
             ->keyBy('currency')
-            ->map(fn($r) => $r->rate);
+            ->map(fn ($r) => $r->rate);
 
         return response()->json($rates);
     }

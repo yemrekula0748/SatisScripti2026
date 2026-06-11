@@ -10,12 +10,13 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
         $permissions = [
             'dashboard.view',
@@ -35,10 +36,10 @@ class DatabaseSeeder extends Seeder
         $superAdminRole->syncPermissions(Permission::all());
 
         $companyAdminRole = Role::firstOrCreate(['name' => 'company-admin']);
-        $companyAdminRole->syncPermissions(array_values(array_filter($permissions, fn($p) => !str_starts_with($p, 'companies.'))));
+        $companyAdminRole->syncPermissions(array_values(array_filter($permissions, fn ($p) => ! str_starts_with($p, 'companies.'))));
 
         $cashierRole = Role::firstOrCreate(['name' => 'cashier']);
-        $cashierRole->syncPermissions(['dashboard.view', 'sales.view', 'sales.create', 'sales.history', 'products.view', 'customers.view']);
+        $cashierRole->syncPermissions(['dashboard.view', 'sales.view', 'sales.create', 'products.view', 'customers.view']);
 
         $superAdmin = User::firstOrCreate(
             ['email' => 'admin@pos.com'],
